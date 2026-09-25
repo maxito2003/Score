@@ -34,13 +34,19 @@ class AuthViewModel(
     }
 
     private fun checkSession() {
-        val user = authRepository.getCurrentUser()
-        if (user != null) {
-            _uiState.update {
-                it.copy(
-                    currentUser = user,
-                    isLoggedIn = true
-                )
+        viewModelScope.launch {
+            try {
+                val user = authRepository.getCurrentUser()
+                if (user != null) {
+                    _uiState.update {
+                        it.copy(
+                            currentUser = user,
+                            isLoggedIn = true
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // Manejo de excepción en caso de error al recuperar credenciales
             }
         }
     }
@@ -127,7 +133,7 @@ class AuthViewModel(
                     it.copy(
                         isLoading = false,
                         currentUser = user,
-                        isLoggedIn = true, // Permite ingresar directamente al usuario
+                        isLoggedIn = true,
                         successMessage = "¡Cuenta creada exitosamente!"
                     )
                 }

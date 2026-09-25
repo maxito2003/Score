@@ -17,6 +17,8 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity"
             android:theme="@style/Theme.Score.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

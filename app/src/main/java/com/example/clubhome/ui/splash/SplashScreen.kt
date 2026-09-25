@@ -9,15 +9,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.example.clubhome.R
+import com.example.clubhome.data.remote.SupabaseClientManager
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
-    onSplashFinished: () -> Unit
+    onSplashFinished: (String) -> Unit
 ) {
     LaunchedEffect(Unit) {
         delay(2000L) // Muestra la imagen durante 2 segundos
-        onSplashFinished()
+
+        // Consulta si hay un token/usuario persistido en Supabase
+        val session = SupabaseClientManager.client.auth.currentSessionOrNull()
+
+        if (session != null) {
+            onSplashFinished("home")
+        } else {
+            onSplashFinished("welcome")
+        }
     }
 
     Box(

@@ -1,6 +1,6 @@
 package com.example.clubhome.data.repository
 
-import com.example.clubhome.data.remote.SupabaseClientManager
+import com.example.clubhome.data.remote.SupabaseClientManager // Importante agregar este import
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.user.UserInfo
@@ -9,6 +9,7 @@ import kotlinx.serialization.json.put
 
 class AuthRepository {
 
+    // CORREGIDO: Sin el ".kt"
     private val client = SupabaseClientManager.client
 
     suspend fun signUp(emailInput: String, passwordInput: String, nameInput: String): UserInfo? {
@@ -34,7 +35,7 @@ class AuthRepository {
         client.auth.signOut()
     }
 
-    fun getCurrentUser(): UserInfo? {
+    suspend fun getCurrentUser(): UserInfo? {
         return client.auth.currentUserOrNull()
     }
 }
