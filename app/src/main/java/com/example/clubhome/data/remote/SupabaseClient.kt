@@ -5,7 +5,7 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
-
+import io.github.jan.supabase.storage.Storage
 object SupabaseClientManager {
 
     // Reemplazar con la URL y la ANON KEY de tu proyecto en Supabase
@@ -18,6 +18,7 @@ object SupabaseClientManager {
             supabaseKey = SUPABASE_KEY
         ) {
             install(Postgrest)
+            install(Storage)
             install(Auth)
             install(Realtime)
         }

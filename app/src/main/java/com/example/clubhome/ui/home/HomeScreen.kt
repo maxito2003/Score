@@ -40,6 +40,7 @@ fun HomeScreen(
     userName: String?,
     onLeagueClick: () -> Unit,
     onPersonalClick: () -> Unit,
+    onViewMatchesClick: () -> Unit,
     onSignOutClick: () -> Unit
 ) {
     Box(
@@ -124,9 +125,9 @@ fun HomeScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(36.dp))
 
-            // Instrucción "Elige el tipo de partida:"
+            // Instrucción "Elige el tipo de partido:"
             Text(
                 text = "Elige el tipo de partido:",
                 style = MaterialTheme.typography.bodyLarge.copy(
@@ -137,14 +138,14 @@ fun HomeScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Botón Liga (Azul Marino)
             Button(
                 onClick = onLeagueClick,
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
-                    .height(60.dp),
+                    .height(55.dp),
                 shape = RoundedCornerShape(30.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BaseballNavy,
@@ -158,14 +159,14 @@ fun HomeScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Botón Personal (Rojo)
             Button(
                 onClick = onPersonalClick,
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
-                    .height(60.dp),
+                    .height(55.dp),
                 shape = RoundedCornerShape(30.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BaseballRed,
@@ -174,6 +175,40 @@ fun HomeScreen(
             ) {
                 Text(
                     text = "Personal",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Pregunta "¿Quieres ver un partido?"
+            Text(
+                text = "¿Quieres ver un partido?",
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontStyle = FontStyle.Italic,
+                    color = Color.White
+                )
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Botón Ver partidos (Azul Marino)
+            Button(
+                onClick = onViewMatchesClick,
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(55.dp),
+                shape = RoundedCornerShape(30.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BaseballNavy,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    text = "Ver partidos",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )

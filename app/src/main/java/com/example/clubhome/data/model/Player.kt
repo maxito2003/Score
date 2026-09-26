@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Player(
     val id: String? = null,
+    @SerialName("user_id")
+    val userId: String? = null,
     @SerialName("team_id")
     val teamId: String? = null,
     val name: String,

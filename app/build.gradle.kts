@@ -60,6 +60,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:2.0.0") // o la versión que estés usando
+    implementation("io.github.jan-tennert.supabase:storage-kt:2.0.0")
+    implementation("io.github.jan-tennert.supabase:storage-kt:VERSION")// <-- ESTA ES LA QUE FALTA
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

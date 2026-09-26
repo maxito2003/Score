@@ -23,16 +23,18 @@ class BaseballRepository {
     }
 
     // --- EQUIPOS ---
-    suspend fun getTeams(groupId: String? = null): List<Team> {
-        return if (groupId != null) {
-            client.postgrest["teams"].select {
-                filter {
+    // --- EQUIPOS ---
+    suspend fun getTeams(groupId: String? = null, userId: String? = null): List<Team> {
+        return client.postgrest["teams"].select {
+            filter {
+                if (groupId != null) {
                     eq("group_id", groupId)
                 }
-            }.decodeList<Team>()
-        } else {
-            client.postgrest["teams"].select().decodeList<Team>()
-        }
+                if (userId != null) {
+                    eq("user_id", userId)
+                }
+            }
+        }.decodeList<Team>()
     }
 
     suspend fun createTeam(team: Team): Team {

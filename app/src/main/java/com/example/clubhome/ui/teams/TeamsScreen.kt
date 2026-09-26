@@ -134,21 +134,21 @@ fun TeamsScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E))
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
                 )
             },
             floatingActionButton = {
                 if (!isAddingNewTeam && teamToEdit == null) {
                     FloatingActionButton(
                         onClick = { isAddingNewTeam = true },
-                        containerColor = BaseballNavy,
+                        containerColor = Color(0xFF1565C0),
                         contentColor = Color.White
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Agregar Equipo")
                     }
                 }
             },
-            containerColor = Color(0xFF121212)
+            containerColor = BaseballNavy
         ) { padding ->
             Box(
                 modifier = Modifier
@@ -159,7 +159,7 @@ fun TeamsScreen(
                 if (isLoading) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
-                        color = BaseballNavy
+                        color = Color.White
                     )
                 }
 
@@ -258,7 +258,7 @@ fun TeamsScreen(
                     Text("Cancelar", color = Color.White)
                 }
             },
-            containerColor = Color(0xFF1E1E1E)
+            containerColor = Color(0xFF000E4A)
         )
     }
 }
@@ -272,8 +272,8 @@ fun TeamCardItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color.Gray, RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))
+            .border(1.dp, Color(0xFF1A2A70), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF001254))
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -294,7 +294,7 @@ fun TeamCardItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp)
-                        .background(Color(0xFF2A2A2A)),
+                        .background(Color(0xFF00051C)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -383,8 +383,8 @@ fun TeamForm(
             modifier = Modifier
                 .size(100.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF2A2A2A))
-                .border(2.dp, BaseballNavy, CircleShape)
+                .background(Color(0xFF00051C))
+                .border(2.dp, Color(0xFF1565C0), CircleShape)
                 .clickable { imagePickerLauncher.launch("image/*") },
             contentAlignment = Alignment.Center
         ) {
@@ -412,7 +412,7 @@ fun TeamForm(
             onValueChange = { teamName = it },
             label = { Text("Nombre del Equipo", color = Color.Gray) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = BaseballNavy,
+                focusedBorderColor = Color(0xFF1565C0),
                 unfocusedBorderColor = Color.Gray,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
@@ -425,7 +425,7 @@ fun TeamForm(
             onValueChange = { coachName = it },
             label = { Text("Coach", color = Color.Gray) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = BaseballNavy,
+                focusedBorderColor = Color(0xFF1565C0),
                 unfocusedBorderColor = Color.Gray,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
@@ -449,7 +449,7 @@ fun TeamForm(
 
             Button(
                 onClick = { onSave(teamName, coachName, selectedImageUri) },
-                colors = ButtonDefaults.buttonColors(containerColor = BaseballNavy),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
                 modifier = Modifier.weight(1f)
             ) {
                 Text(if (teamToEdit != null) "Guardar" else "Registrar", color = Color.White)

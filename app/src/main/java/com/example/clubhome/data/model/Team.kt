@@ -6,8 +6,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Team(
     val id: String? = null,
+    @SerialName("user_id")
+    val userId: String? = null,
     val name: String,
-    val coach: String? = null, // <- Agrega esta línea
+    val coach: String? = null,
     @SerialName("group_id")
     val groupId: String? = null,
     @SerialName("logo_url")

@@ -5,29 +5,26 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.example.clubhome.ui.auth.*
-import com.example.clubhome.ui.components.BaseballDiamond
+import com.example.clubhome.ui.game.GameScreen
 import com.example.clubhome.ui.home.HomeScreen
+import com.example.clubhome.ui.matches.LiveMatchesScreen
+import com.example.clubhome.ui.matches.LiveMatchesViewModel
+import com.example.clubhome.ui.matches.MatchStatsScreen
 import com.example.clubhome.ui.players.PlayersScreen
 import com.example.clubhome.ui.splash.SplashScreen
 import com.example.clubhome.ui.teams.TeamsScreen
 import com.example.clubhome.ui.theme.CLUBHOMETheme
-import kotlinx.coroutines.launch
-import com.example.clubhome.ui.game.GameScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,8 +45,6 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
     val navController = rememberNavController()
     val uiState by authViewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
 
     NavHost(
         navController = navController,
@@ -111,11 +106,45 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
                 userName = uiState.currentUser?.userMetadata?.get("name")?.toString(),
                 onLeagueClick = { navController.navigate("match/LIGA") },
                 onPersonalClick = { navController.navigate("match/PERSONAL") },
+                onViewMatchesClick = { navController.navigate("matches_list") },
                 onSignOutClick = {
                     authViewModel.signOut {
                         navController.navigate("welcome") { popUpTo("home") { inclusive = true } }
                     }
                 }
+            )
+        }
+
+        // Ruta de Lista de Partidos en Tiempo Real
+        composable("matches_list") {
+            val liveViewModel: LiveMatchesViewModel = viewModel()
+            val matchesList by liveViewModel.matches.collectAsState()
+            val isLoading by liveViewModel.isLoading.collectAsState()
+
+            LiveMatchesScreen(
+                matches = matchesList,
+                isLoading = isLoading,
+                onMatchClick = { matchId ->
+                    if (matchId.isNotBlank()) {
+                        navController.navigate("match_stats/$matchId")
+                    } else {
+                        Toast.makeText(context, "ID de partido no válido", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        // Ruta para ver las Estadísticas / Detalles del Partido
+        composable(
+            route = "match_stats/{matchId}",
+            arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+            MatchStatsScreen(
+                matchId = matchId,
+                onBackClick = { navController.popBackStack() }
             )
         }
 
@@ -126,52 +155,25 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
         ) { backStackEntry ->
             val modeTitle = backStackEntry.arguments?.getString("mode") ?: "LIGA"
 
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = {
-                    ModalDrawerSheet(drawerContainerColor = BaseballNavy) {
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        TextButton(onClick = {
-                            scope.launch { drawerState.close() }
-                            navController.navigate("home") {
-                                popUpTo("home") { inclusive = true }
-                            }
-                        }) {
-                            Text("Home", color = Color.White, fontSize = 20.sp)
-                        }
-
-                        TextButton(onClick = {
-                            scope.launch { drawerState.close() }
-                            navController.navigate("teams/$modeTitle")
-                        }) {
-                            Text("Equipos", color = Color.White, fontSize = 20.sp)
-                        }
-
-                        TextButton(onClick = {
-                            scope.launch { drawerState.close() }
-                            navController.navigate("players/general/General")
-                        }) {
-                            Text("Jugadores", color = Color.White, fontSize = 20.sp)
-                        }
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        TextButton(onClick = {
-                            scope.launch { drawerState.close() }
-                            authViewModel.signOut {
-                                navController.navigate("welcome") { popUpTo(0) }
-                            }
-                        }) {
-                            Text("Cerrar Sesión", color = Color.White, fontSize = 18.sp)
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
+            GameScreen(
+                modeTitle = modeTitle,
+                onNavigateHome = {
+                    navController.navigate("home") {
+                        popUpTo("home") { inclusive = true }
+                    }
+                },
+                onNavigateTeams = {
+                    navController.navigate("teams/$modeTitle")
+                },
+                onNavigatePlayers = {
+                    navController.navigate("players/general/General")
+                },
+                onSignOut = {
+                    authViewModel.signOut {
+                        navController.navigate("welcome") { popUpTo(0) }
                     }
                 }
-            ) {
-
-                GameScreen()
-            }
+            )
         }
 
         // Ruta de Equipos
