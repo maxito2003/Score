@@ -17,7 +17,10 @@ import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.example.clubhome.ui.auth.*
 import com.example.clubhome.ui.game.GameScreen
+import com.example.clubhome.ui.game.GameViewModel
 import com.example.clubhome.ui.home.HomeScreen
+import com.example.clubhome.ui.matches.FinishedGameDetailScreen
+import com.example.clubhome.ui.matches.FinishedGamesListScreen
 import com.example.clubhome.ui.matches.LiveMatchesScreen
 import com.example.clubhome.ui.matches.LiveMatchesViewModel
 import com.example.clubhome.ui.matches.MatchStatsScreen
@@ -45,6 +48,9 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
     val navController = rememberNavController()
     val uiState by authViewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    // Instancia compartida del GameViewModel para conservar marcadores, lineups y cronómetro
+    val sharedGameViewModel: GameViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -135,6 +141,29 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
             )
         }
 
+        // Ruta de Lista de Partidos Terminados
+        composable("finished_games_list") {
+            FinishedGamesListScreen(
+                onMatchClick = { matchId ->
+                    navController.navigate("finished_game_detail/$matchId")
+                },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        // Ruta de Detalle de Partido Terminado
+        composable(
+            route = "finished_game_detail/{matchId}",
+            arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+            FinishedGameDetailScreen(
+                matchId = matchId,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
         // Ruta para ver las Estadísticas / Detalles del Partido
         composable(
             route = "match_stats/{matchId}",
@@ -157,6 +186,7 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
 
             GameScreen(
                 modeTitle = modeTitle,
+                gameViewModel = sharedGameViewModel,
                 onNavigateHome = {
                     navController.navigate("home") {
                         popUpTo("home") { inclusive = true }
@@ -167,6 +197,9 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
                 },
                 onNavigatePlayers = {
                     navController.navigate("players/general/General")
+                },
+                onNavigateFinishedGames = {
+                    navController.navigate("finished_games_list")
                 },
                 onSignOut = {
                     authViewModel.signOut {
@@ -191,7 +224,7 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
                 },
                 onNavigateMatch = {
                     navController.navigate("match/$modeTitle") {
-                        popUpTo("match/$modeTitle") { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
                 onSignOut = {

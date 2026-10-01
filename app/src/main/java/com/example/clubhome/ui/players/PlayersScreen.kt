@@ -33,8 +33,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.clubhome.data.model.Player
+import com.example.clubhome.data.model.Team
+import com.example.clubhome.ui.teams.TeamsViewModel
 
-// Color azul marino principal del tema
 val AzulMarinoBeisbol = Color(0xFF000B3B)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,10 +44,12 @@ fun PlayersScreen(
     teamId: String,
     teamName: String,
     onBack: () -> Unit,
-    viewModel: PlayersViewModel = viewModel()
+    viewModel: PlayersViewModel = viewModel(),
+    teamsViewModel: TeamsViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val playersList by viewModel.players.collectAsState()
+    val teamsList by teamsViewModel.teams.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     var isAddingPlayer by remember { mutableStateOf(false) }
@@ -54,6 +57,7 @@ fun PlayersScreen(
     var playerToDelete by remember { mutableStateOf<Player?>(null) }
 
     LaunchedEffect(teamId) {
+        teamsViewModel.loadTeams()
         viewModel.loadPlayersByTeam(teamId)
     }
 
@@ -94,14 +98,16 @@ fun PlayersScreen(
 
             if (isAddingPlayer) {
                 PlayerForm(
-                    onSave = { name, number, position, photoUri ->
+                    teamsList = teamsList,
+                    initialTeamId = if (teamId != "general") teamId else null,
+                    onSave = { name, number, position, selectedTeamId, photoUri ->
                         viewModel.addPlayer(
                             context = context,
                             name = name,
                             number = number,
                             position = position,
                             photoUri = photoUri,
-                            teamId = teamId
+                            teamId = selectedTeamId
                         )
                         isAddingPlayer = false
                     },
@@ -142,15 +148,18 @@ fun PlayersScreen(
                     Text("Editar Jugador", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
                     PlayerForm(
+                        teamsList = teamsList,
                         initialName = player.name,
                         initialNumber = player.number?.toString() ?: "",
                         initialPosition = player.position ?: "",
+                        initialTeamId = player.teamId,
                         initialPhotoUrl = player.photoUrl,
-                        onSave = { name, number, position, photoUri ->
+                        onSave = { name, number, position, selectedTeamId, photoUri ->
                             val updatedPlayer = player.copy(
                                 name = name,
                                 number = number.toIntOrNull(),
-                                position = position
+                                position = position,
+                                teamId = selectedTeamId
                             )
                             viewModel.updatePlayer(
                                 context = context,
@@ -285,19 +294,24 @@ fun PlayerCardItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerForm(
+    teamsList: List<Team>,
     initialName: String = "",
     initialNumber: String = "",
     initialPosition: String = "",
+    initialTeamId: String? = null,
     initialPhotoUrl: String? = null,
-    onSave: (name: String, number: String, position: String, photoUri: Uri?) -> Unit,
+    onSave: (name: String, number: String, position: String, selectedTeamId: String?, photoUri: Uri?) -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initialName) }
     var number by remember { mutableStateOf(initialNumber) }
     var position by remember { mutableStateOf(initialPosition) }
+    var selectedTeamId by remember { mutableStateOf(initialTeamId) }
+    var expandedDropdown by remember { mutableStateOf(false) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -305,7 +319,6 @@ fun PlayerForm(
     ) { uri ->
         if (uri != null) {
             try {
-                // Otorgar permiso persistente para leer la URI seleccionada de la galería
                 context.contentResolver.takePersistableUriPermission(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -327,6 +340,8 @@ fun PlayerForm(
         focusedContainerColor = Color(0xFF000833),
         unfocusedContainerColor = Color(0xFF000833)
     )
+
+    val selectedTeamName = teamsList.find { it.id == selectedTeamId }?.name ?: "Sin equipo asignado"
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -393,6 +408,48 @@ fun PlayerForm(
             modifier = Modifier.fillMaxWidth()
         )
 
+        // Menu desplegable para seleccionar equipo
+        ExposedDropdownMenuBox(
+            expanded = expandedDropdown,
+            onExpandedChange = { expandedDropdown = !expandedDropdown },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = selectedTeamName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Equipo Asignado") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
+                colors = textFieldColors,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+
+            ExposedDropdownMenu(
+                expanded = expandedDropdown,
+                onDismissRequest = { expandedDropdown = false },
+                modifier = Modifier.background(Color(0xFF001254))
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sin equipo asignado", color = Color.White) },
+                    onClick = {
+                        selectedTeamId = null
+                        expandedDropdown = false
+                    }
+                )
+                teamsList.forEach { team ->
+                    DropdownMenuItem(
+                        text = { Text(team.name, color = Color.White) },
+                        onClick = {
+                            selectedTeamId = team.id
+                            expandedDropdown = false
+                        }
+                    )
+                }
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onCancel,
@@ -402,7 +459,7 @@ fun PlayerForm(
                 Text("Cancelar", color = Color.White)
             }
             Button(
-                onClick = { if (name.isNotBlank()) onSave(name, number, position, photoUri) },
+                onClick = { if (name.isNotBlank()) onSave(name, number, position, selectedTeamId, photoUri) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
                 modifier = Modifier.weight(1f)
             ) {

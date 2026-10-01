@@ -1,5 +1,6 @@
 package com.example.clubhome.ui.auth
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.clubhome.data.repository.AuthRepository
@@ -45,8 +46,8 @@ class AuthViewModel(
                         )
                     }
                 }
-            } catch (_: Exception) {
-                // Manejo de excepción en caso de error al recuperar credenciales
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error al verificar la sesión actual", e)
             }
         }
     }
@@ -94,6 +95,7 @@ class AuthViewModel(
                 }
                 onSuccess()
             } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error durante el inicio de sesión: ${e.message}", e)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -139,6 +141,7 @@ class AuthViewModel(
                 }
                 onSuccess()
             } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error durante el registro de usuario: ${e.message}", e)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -153,7 +156,9 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 authRepository.signOut()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error al cerrar sesión", e)
+            }
             _uiState.update {
                 AuthUiState()
             }
@@ -163,14 +168,34 @@ class AuthViewModel(
 
     private fun parseAuthErrorMessage(e: Exception): String {
         val msg = e.message ?: ""
+        val cause = e.cause?.message ?: ""
+        val fullError = "$msg $cause".lowercase()
+
+        Log.d("AuthViewModel", "Detalle técnico del error: ${e::class.java.simpleName} - $msg")
+
         return when {
-            msg.contains("email_not_confirmed", ignoreCase = true) ->
-                "Tu correo no ha sido confirmado. Para ingresar sin confirmar correo, desactiva la opción 'Confirm email' en tu panel de Supabase (Authentication -> Email)."
-            msg.contains("Invalid login credentials", ignoreCase = true) || msg.contains("invalid_credentials", ignoreCase = true) ->
+            // Error de confirmación de correo
+            fullError.contains("email_not_confirmed") || fullError.contains("email not confirmed") ->
+                "Tu correo no ha sido confirmado. Revisa tu bandeja de entrada o desactiva 'Confirm email' en tu panel de Supabase."
+
+            // Credenciales inválidas
+            fullError.contains("invalid login credentials") || fullError.contains("invalid_credentials") || fullError.contains("invalid_grant") ->
                 "Correo o contraseña incorrectos. Verifica tus datos."
-            msg.contains("User already registered", ignoreCase = true) || msg.contains("user_already_exists", ignoreCase = true) ->
+
+            // Usuario existente
+            fullError.contains("user already registered") || fullError.contains("user_already_exists") || fullError.contains("already exists") ->
                 "Este correo ya está registrado. Intenta iniciar sesión."
-            else -> "Ocurrió un error al procesar tu solicitud. Intenta nuevamente."
+
+            // Error de conexión a Internet / Servidor
+            fullError.contains("unknownhostexception") || fullError.contains("unable to resolve host") || fullError.contains("connectexception") || fullError.contains("timeout") ->
+                "Error de conexión. Verifica que tengas acceso a Internet."
+
+            // Errores de Base de datos / Triggers / RLS
+            fullError.contains("row-level security") || fullError.contains("rls") || fullError.contains("database error") ->
+                "Error en el servidor al registrar los datos del usuario. Revisa las políticas RLS en Supabase."
+
+            // Mensaje por defecto incluyendo un fragmento legible si está disponible
+            else -> if (msg.isNotBlank() && msg.length < 100) "Error: $msg" else "Ocurrió un error al procesar tu solicitud. Intenta nuevamente."
         }
     }
 }

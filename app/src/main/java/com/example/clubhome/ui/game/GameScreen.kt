@@ -41,7 +41,12 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-
+import com.example.clubhome.ui.matches.ReadOnlyCounter
+import com.example.clubhome.ui.matches.PosDescription
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.clubhome.data.model.Team
+import com.example.clubhome.ui.teams.TeamsViewModel
 val AzulMarinoBeisbol = Color(0xFF000B3B)
 val CELL_SIZE = 48.dp
 
@@ -56,7 +61,12 @@ data class BaseState(
 ) {
     val isRun: Boolean get() = homeBase || (firstBase && secondBase && thirdBase && homeBase)
 }
-
+@Serializable
+data class LineupDataPayload(
+    val team1Lineup: List<PlayerLineup>,
+    val team2Lineup: List<PlayerLineup>,
+    val durationSeconds: Long
+)
 @Serializable
 data class PlayerLineup(
     val number: Int,
@@ -73,86 +83,135 @@ fun GameScreen(
     onNavigateHome: () -> Unit,
     onNavigateTeams: () -> Unit,
     onNavigatePlayers: () -> Unit,
+    onNavigateFinishedGames: () -> Unit,
     onSignOut: () -> Unit,
-    playersViewModel: PlayersViewModel = viewModel()
+    playersViewModel: PlayersViewModel = viewModel(),
+    teamsViewModel: TeamsViewModel = viewModel(),
+    gameViewModel: GameViewModel = viewModel()
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     val playersList by playersViewModel.players.collectAsState()
-    val isLoading by playersViewModel.isLoading.collectAsState()
+    val isLoadingPlayers by playersViewModel.isLoading.collectAsState()
 
-    var currentMatchId by remember { mutableStateOf<String?>(null) }
-    var selectedTeam by remember { mutableStateOf(1) } // 1 para Equipo 1, 2 para Equipo 2
+    // Cargar equipos registrados desde TeamsViewModel
+    val teamsList by teamsViewModel.teams.collectAsState()
 
-    // --- CRONÓMETRO / RELOJ ---
-    var isTimerRunning by remember { mutableStateOf(false) }
-    var elapsedSeconds by remember { mutableStateOf(0L) }
+    // Identificar el nombre del equipo seleccionado actualmente en la interfaz
+    val activeTeamName = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Name else gameViewModel.team2Name
 
-    LaunchedEffect(isTimerRunning) {
-        while (isTimerRunning) {
-            delay(1000L)
-            elapsedSeconds++
+    // Buscar el equipo activo dentro de la lista completa para obtener su ID (UUID)
+    val activeTeam = remember(teamsList, activeTeamName) {
+        teamsList.find { it.name.equals(activeTeamName, ignoreCase = true) }
+    }
+
+    // Filtrar estrictamente la lista de nombres por los jugadores que pertenecen al equipo activo
+    val registeredPlayerNames by remember(playersList, activeTeam) {
+        derivedStateOf {
+            if (activeTeam != null) {
+                playersList
+                    .filter { it.teamId == activeTeam.id }
+                    .map { it.name }
+            } else {
+                emptyList()
+            }
         }
     }
 
-    val minutes = elapsedSeconds / 60
-    val seconds = elapsedSeconds % 60
+    var showPosHelpDialog by remember { mutableStateOf(false) }
+    var showFinishMatchDialog by remember { mutableStateOf(false) }
+    var activeDialogCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    // Inicializaciones al montar la pantalla
+    LaunchedEffect(Unit) {
+        teamsViewModel.loadTeams()
+        gameViewModel.initializeLineups()
+
+        // Solo crea el registro en Supabase si NO hay un partido activo cargado en el ViewModel
+        if (gameViewModel.currentMatchId == null) {
+            try {
+                val initialPayload = LineupDataPayload(
+                    team1Lineup = gameViewModel.team1Lineup.toList(),
+                    team2Lineup = gameViewModel.team2Lineup.toList(),
+                    durationSeconds = 0L
+                )
+                val initialJson = Json.encodeToString(initialPayload)
+                val newMatch = Match(
+                    mode = modeTitle,
+                    homeTeam = gameViewModel.team1Name,
+                    awayTeam = gameViewModel.team2Name,
+                    status = "LIVE",
+                    lineupData = initialJson,
+                    runs = 0,
+                    hits = 0,
+                    errors = 0,
+                    outs = 0,
+                    homeRuns = 0
+                )
+                val insertedMatch = SupabaseClientManager.client.postgrest["matches"]
+                    .insert(newMatch) {
+                        select()
+                    }
+                    .decodeSingle<Match>()
+
+                gameViewModel.currentMatchId = insertedMatch.id
+            } catch (e: Exception) {
+                Log.e("GameScreen", "Error al crear el partido inicial", e)
+            }
+        }
+    }
+
+    // Cargar jugadores reactivamente según el equipo que esté activo en pantalla
+    LaunchedEffect(activeTeam?.id) {
+        val teamIdToLoad = activeTeam?.id
+        if (!teamIdToLoad.isNullOrEmpty()) {
+            playersViewModel.loadPlayersByTeam(teamIdToLoad)
+        } else {
+            playersViewModel.loadPlayersByTeam("general")
+        }
+    }
+
+    val minutes = gameViewModel.elapsedSeconds / 60
+    val seconds = gameViewModel.elapsedSeconds % 60
     val timeFormatted = String.format("%02d:%02d", minutes, seconds)
 
-    // --- ALINEACIONES SEPARADAS POR EQUIPO ---
-    val team1Lineup = remember {
-        mutableStateListOf<PlayerLineup>().apply {
-            for (i in 1..10) {
-                add(PlayerLineup(i, "Seleccionar", BASEBALL_POSITIONS[i - 1], List(10) { BaseState() }))
-            }
-        }
-    }
+    val activeLineup = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Lineup else gameViewModel.team2Lineup
 
-    val team2Lineup = remember {
-        mutableStateListOf<PlayerLineup>().apply {
-            for (i in 1..10) {
-                add(PlayerLineup(i, "Seleccionar", BASEBALL_POSITIONS[i - 1], List(10) { BaseState() }))
-            }
-        }
-    }
+    val calculatedRunsTeam1 = gameViewModel.team1Lineup.sumOf { player -> player.innings.count { it.isRun } }
+    val calculatedRunsTeam2 = gameViewModel.team2Lineup.sumOf { player -> player.innings.count { it.isRun } }
 
-    val activeLineup = if (selectedTeam == 1) team1Lineup else team2Lineup
+    val currentHits = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Hits else gameViewModel.team2Hits
+    val currentErrors = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Errors else gameViewModel.team2Errors
+    val currentOuts = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Outs else gameViewModel.team2Outs
+    val currentHomeRuns = if (gameViewModel.selectedTeam == 1) gameViewModel.team1HomeRuns else gameViewModel.team2HomeRuns
+    val currentCalculatedRuns = if (gameViewModel.selectedTeam == 1) calculatedRunsTeam1 else calculatedRunsTeam2
 
-    // --- MARCADORES SEPARADOS POR EQUIPO ---
-    var team1Hits by remember { mutableStateOf(0) }
-    var team1Errors by remember { mutableStateOf(0) }
-    var team1Outs by remember { mutableStateOf(0) }
-    var team1HomeRuns by remember { mutableStateOf(0) }
+    fun syncToSupabase(status: String = "LIVE") {
+        val matchId = gameViewModel.currentMatchId ?: return
 
-    var team2Hits by remember { mutableStateOf(0) }
-    var team2Errors by remember { mutableStateOf(0) }
-    var team2Outs by remember { mutableStateOf(0) }
-    var team2HomeRuns by remember { mutableStateOf(0) }
+        // Usamos LineupDataPayload explícitamente para evitar el error "Serializer for class Any"
+        val payload = LineupDataPayload(
+            team1Lineup = gameViewModel.team1Lineup.toList(),
+            team2Lineup = gameViewModel.team2Lineup.toList(),
+            durationSeconds = gameViewModel.elapsedSeconds
+        )
 
-    val calculatedRunsTeam1 = team1Lineup.sumOf { player -> player.innings.count { it.isRun } }
-    val calculatedRunsTeam2 = team2Lineup.sumOf { player -> player.innings.count { it.isRun } }
-
-    val currentHits = if (selectedTeam == 1) team1Hits else team2Hits
-    val currentErrors = if (selectedTeam == 1) team1Errors else team2Errors
-    val currentOuts = if (selectedTeam == 1) team1Outs else team2Outs
-    val currentHomeRuns = if (selectedTeam == 1) team1HomeRuns else team2HomeRuns
-    val currentCalculatedRuns = if (selectedTeam == 1) calculatedRunsTeam1 else calculatedRunsTeam2
-
-    fun syncToSupabase() {
-        val matchId = currentMatchId ?: return
-        val jsonLineup = Json.encodeToString(activeLineup.toList())
+        val jsonLineup = Json.encodeToString(payload)
 
         scope.launch(Dispatchers.IO) {
             try {
                 SupabaseClientManager.client.postgrest["matches"]
                     .update({
                         set("lineup_data", jsonLineup)
+                        set("home_team", gameViewModel.team1Name)
+                        set("away_team", gameViewModel.team2Name)
                         set("hits", currentHits)
                         set("errors", currentErrors)
                         set("outs", currentOuts)
                         set("home_runs", currentHomeRuns)
                         set("runs", currentCalculatedRuns)
+                        set("status", status)
                     }) {
                         filter { eq("id", matchId) }
                     }
@@ -162,60 +221,11 @@ fun GameScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        playersViewModel.loadPlayersByTeam("general")
-
-        try {
-            val initialJson = Json.encodeToString(team1Lineup.toList())
-            val newMatch = Match(
-                mode = modeTitle,
-                homeTeam = "Equipo 1",
-                awayTeam = "Equipo 2",
-                status = "LIVE",
-                lineupData = initialJson,
-                runs = 0,
-                hits = 0,
-                errors = 0,
-                outs = 0,
-                homeRuns = 0
-            )
-            val insertedMatch = SupabaseClientManager.client.postgrest["matches"]
-                .insert(newMatch) {
-                    select()
-                }
-                .decodeSingle<Match>()
-
-            currentMatchId = insertedMatch.id
-        } catch (e: Exception) {
-            Log.e("GameScreen", "Error al crear el partido inicial", e)
-        }
+    fun finishMatch() {
+        gameViewModel.pauseTimer()
+        syncToSupabase(status = "FINISHED")
+        onNavigateFinishedGames()
     }
-
-    DisposableEffect(currentMatchId) {
-        onDispose {
-            currentMatchId?.let { matchId ->
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        SupabaseClientManager.client.postgrest["matches"]
-                            .update({
-                                set("status", "FINISHED")
-                            }) {
-                                filter { eq("id", matchId) }
-                            }
-                    } catch (e: Exception) {
-                        Log.e("GameScreen", "Error al finalizar el partido", e)
-                    }
-                }
-            }
-        }
-    }
-
-    val registeredPlayerNames = remember(playersList) {
-        playersList.map { it.name }
-    }
-
-    var showPosHelpDialog by remember { mutableStateOf(false) }
-    var activeDialogCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -248,6 +258,15 @@ fun GameScreen(
                     }
                 ) {
                     Text("Jugadores", color = Color.White, fontSize = 20.sp)
+                }
+
+                TextButton(
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateFinishedGames()
+                    }
+                ) {
+                    Text("Partidos Terminados", color = Color.White, fontSize = 20.sp)
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -313,46 +332,59 @@ fun GameScreen(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Fila superior: Equipos vs Equipos + Cronómetro con Play/Pausa
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Equipo 1 vs Equipo 2", color = Color.LightGray, fontSize = 14.sp)
+                    Text("${gameViewModel.team1Name} vs ${gameViewModel.team2Name}", color = Color.LightGray, fontSize = 14.sp)
 
-                    Surface(
-                        color = Color(0xFF001254),
-                        shape = RoundedCornerShape(20.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1A2A70))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        Button(
+                            onClick = { showFinishMatchDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
                         ) {
-                            IconButton(
-                                onClick = { isTimerRunning = !isTimerRunning },
-                                modifier = Modifier.size(24.dp)
+                            Text("Terminar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Surface(
+                            color = Color(0xFF001254),
+                            shape = RoundedCornerShape(20.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1A2A70))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
-                                Icon(
-                                    imageVector = if (isTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Cronómetro",
-                                    tint = if (isTimerRunning) Color(0xFFFF4081) else Color(0xFF4CAF50),
-                                    modifier = Modifier.size(18.dp)
+                                IconButton(
+                                    onClick = { gameViewModel.toggleTimer() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (gameViewModel.isTimerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Cronómetro",
+                                        tint = if (gameViewModel.isTimerRunning) Color(0xFFFF4081) else Color(0xFF4CAF50),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = timeFormatted,
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = timeFormatted,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
                 }
 
-                // Marcador Superior
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF001254)),
                     shape = RoundedCornerShape(12.dp),
@@ -366,57 +398,77 @@ fun GameScreen(
                     ) {
                         ReadOnlyCounter("Carreras", currentCalculatedRuns, Color(0xFF4CAF50))
                         ScoreCounter("Hits", currentHits, Color(0xFF2196F3)) { delta ->
-                            if (selectedTeam == 1) team1Hits = (team1Hits + delta).coerceAtLeast(0)
-                            else team2Hits = (team2Hits + delta).coerceAtLeast(0)
+                            if (gameViewModel.selectedTeam == 1) {
+                                gameViewModel.team1Hits = (gameViewModel.team1Hits + delta).coerceAtLeast(0)
+                            } else {
+                                gameViewModel.team2Hits = (gameViewModel.team2Hits + delta).coerceAtLeast(0)
+                            }
                             syncToSupabase()
                         }
                         ScoreCounter("Errores", currentErrors, Color(0xFFF44336)) { delta ->
-                            if (selectedTeam == 1) team1Errors = (team1Errors + delta).coerceAtLeast(0)
-                            else team2Errors = (team2Errors + delta).coerceAtLeast(0)
+                            if (gameViewModel.selectedTeam == 1) {
+                                gameViewModel.team1Errors = (gameViewModel.team1Errors + delta).coerceAtLeast(0)
+                            } else {
+                                gameViewModel.team2Errors = (gameViewModel.team2Errors + delta).coerceAtLeast(0)
+                            }
                             syncToSupabase()
                         }
                         ScoreCounter("Out", currentOuts, Color(0xFFFFEB3B)) { delta ->
-                            if (selectedTeam == 1) team1Outs = (team1Outs + delta).coerceIn(0, 3)
-                            else team2Outs = (team2Outs + delta).coerceIn(0, 3)
+                            if (gameViewModel.selectedTeam == 1) {
+                                gameViewModel.team1Outs = (gameViewModel.team1Outs + delta).coerceIn(0, 3)
+                            } else {
+                                gameViewModel.team2Outs = (gameViewModel.team2Outs + delta).coerceIn(0, 3)
+                            }
                             syncToSupabase()
                         }
                         ScoreCounter("HR", currentHomeRuns, Color(0xFFFF9800)) { delta ->
-                            if (selectedTeam == 1) team1HomeRuns = (team1HomeRuns + delta).coerceAtLeast(0)
-                            else team2HomeRuns = (team2HomeRuns + delta).coerceAtLeast(0)
+                            if (gameViewModel.selectedTeam == 1) {
+                                gameViewModel.team1HomeRuns = (gameViewModel.team1HomeRuns + delta).coerceAtLeast(0)
+                            } else {
+                                gameViewModel.team2HomeRuns = (gameViewModel.team2HomeRuns + delta).coerceAtLeast(0)
+                            }
                             syncToSupabase()
                         }
                     }
                 }
 
-                // Selector de Equipos (Tab Dividida)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            selectedTeam = 1
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TeamDropdownButton(
+                        teamName = gameViewModel.team1Name,
+                        isSelected = gameViewModel.selectedTeam == 1,
+                        teamsList = teamsList,
+                        modifier = Modifier.weight(1f),
+                        onButtonClick = {
+                            gameViewModel.selectedTeam = 1
                             syncToSupabase()
                         },
+                        onTeamSelected = { selected ->
+                            gameViewModel.team1Name = selected.name
+                            gameViewModel.selectedTeam = 1
+                            syncToSupabase()
+                        }
+                    )
+
+                    TeamDropdownButton(
+                        teamName = gameViewModel.team2Name,
+                        isSelected = gameViewModel.selectedTeam == 2,
+                        teamsList = teamsList,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedTeam == 1) Color(0xFF1565C0) else Color(0xFF001666)
-                        )
-                    ) {
-                        Text("Equipo 1", color = Color.White)
-                    }
-                    Button(
-                        onClick = {
-                            selectedTeam = 2
+                        onButtonClick = {
+                            gameViewModel.selectedTeam = 2
                             syncToSupabase()
                         },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedTeam == 2) Color(0xFF1565C0) else Color(0xFF001666)
-                        )
-                    ) {
-                        Text("Equipo 2", color = Color.White)
-                    }
+                        onTeamSelected = { selected ->
+                            gameViewModel.team2Name = selected.name
+                            gameViewModel.selectedTeam = 2
+                            syncToSupabase()
+                        }
+                    )
                 }
 
-                // Tabla de Anotación
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF000E4A),
@@ -474,7 +526,7 @@ fun GameScreen(
 
                         HorizontalDivider(color = Color(0xFF1A2A70))
 
-                        if (isLoading && registeredPlayerNames.isEmpty()) {
+                        if (isLoadingPlayers && registeredPlayerNames.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -543,11 +595,12 @@ fun GameScreen(
                                         }
 
                                         Text(
-                                            text = player.position,
+                                            text = "${playerIdx + 1}",
                                             color = Color(0xFF64B5F6),
                                             modifier = Modifier.width(60.dp),
                                             fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
                                         )
 
                                         Row(modifier = Modifier.horizontalScroll(tableHorizontalScrollState)) {
@@ -573,7 +626,6 @@ fun GameScreen(
                             }
                         }
 
-                        // --- FILA INFERIOR DE TOTALES POR INNING (CARRERAS ACUMULADAS DE CADA ENTRADA) ---
                         HorizontalDivider(color = Color(0xFF1A2A70), thickness = 2.dp)
                         Row(
                             modifier = Modifier
@@ -619,7 +671,55 @@ fun GameScreen(
         }
     }
 
-    // Modal Glosario Original de Posiciones
+    // --- DIÁLOGO DE CONFIRMACIÓN PARA TERMINAR PARTIDO ---
+    if (showFinishMatchDialog) {
+        AlertDialog(
+            onDismissRequest = { showFinishMatchDialog = false },
+            title = { Text("Terminar Partido", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("¿Estás seguro de que deseas finalizar el partido? Se guardarán los datos finales y pasará a la sección de Partidos Terminados.", color = Color.LightGray) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showFinishMatchDialog = false
+                        finishMatch()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Finalizar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishMatchDialog = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF000E4A)
+        )
+    }
+
+    // --- MOSTRAR EL DIÁLOGO DE BASES AL TOCAR UNA CELDA ---
+    activeDialogCell?.let { (playerIdx, inningIdx) ->
+        if (playerIdx in activeLineup.indices) {
+            val player = activeLineup[playerIdx]
+            val currentInningState = player.innings.getOrElse(inningIdx) { BaseState() }
+
+            BaseAnnotationDialog(
+                initialState = currentInningState,
+                onDismiss = { activeDialogCell = null },
+                onSave = { updatedState ->
+                    val updatedInnings = player.innings.toMutableList()
+                    if (inningIdx in updatedInnings.indices) {
+                        updatedInnings[inningIdx] = updatedState
+                        activeLineup[playerIdx] = player.copy(innings = updatedInnings)
+                        syncToSupabase()
+                    }
+                    activeDialogCell = null
+                }
+            )
+        }
+    }
+
+    // --- GLOSARIO DE POSICIONES ---
     if (showPosHelpDialog) {
         AlertDialog(
             onDismissRequest = { showPosHelpDialog = false },
@@ -628,39 +728,140 @@ fun GameScreen(
                     Text("Entendido", color = Color(0xFF64B5F6))
                 }
             },
-            title = { Text("Glosario de Posiciones", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Glosario de Posiciones (1-10)", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PosDescription("P", "Lanzador (Pitcher)")
-                    PosDescription("C", "Receptor (Catcher)")
-                    PosDescription("1B", "Primera Base")
-                    PosDescription("2B", "Segunda Base")
-                    PosDescription("3B", "Tercera Base")
-                    PosDescription("SS", "Campocorto (Shortstop)")
-                    PosDescription("LF", "Jardinero Izquierdo (Left Fielder)")
-                    PosDescription("CF", "Jardinero Central (Center Fielder)")
-                    PosDescription("RF", "Jardinero Derecho (Right Fielder)")
-                    PosDescription("DH", "Bateador Designado / Extra")
+                    PosDescription("1", "Lanzador (Pitcher / P)")
+                    PosDescription("2", "Receptor (Catcher / C)")
+                    PosDescription("3", "Primera Base (1B)")
+                    PosDescription("4", "Segunda Base (2B)")
+                    PosDescription("5", "Tercera Base (3B)")
+                    PosDescription("6", "Campocorto (Shortstop / SS)")
+                    PosDescription("7", "Jardinero Izquierdo (Left Fielder / LF)")
+                    PosDescription("8", "Jardinero Central (Center Fielder / CF)")
+                    PosDescription("9", "Jardinero Derecho (Right Fielder / RF)")
+                    PosDescription("10", "Bateador Designado / Bateador Extra (DH/EH)")
                 }
             },
             containerColor = Color(0xFF000E4A)
         )
     }
 
-    activeDialogCell?.let { (pIdx, iIdx) ->
-        val currentState = activeLineup[pIdx].innings[iIdx]
-        BaseAnnotationDialog(
-            initialState = currentState,
-            onDismiss = { activeDialogCell = null },
-            onSave = { updatedState ->
-                val newInnings = activeLineup[pIdx].innings.toMutableList().apply {
-                    this[iIdx] = updatedState
+
+    // --- DIÁLOGO DE CONFIRMACIÓN PARA TERMINAR PARTIDO ---
+    if (showFinishMatchDialog) {
+        AlertDialog(
+            onDismissRequest = { showFinishMatchDialog = false },
+            containerColor = Color(0xFF000E4A),
+            title = {
+                Text("Terminar Partido", color = Color.White, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "¿Estás seguro de que deseas finalizar este partido? Se guardarán todas las estadísticas, carreras y alineaciones en el historial.",
+                    color = Color.LightGray
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showFinishMatchDialog = false
+                        finishMatch()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Terminar", color = Color.White)
                 }
-                activeLineup[pIdx] = activeLineup[pIdx].copy(innings = newInnings)
-                activeDialogCell = null
-                syncToSupabase()
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishMatchDialog = false }) {
+                    Text("Cancelar", color = Color.LightGray)
+                }
             }
         )
+    }
+}
+
+// Componente para los botones desplegables con la flechita
+@Composable
+fun TeamDropdownButton(
+    teamName: String,
+    isSelected: Boolean,
+    teamsList: List<Team>,
+    modifier: Modifier = Modifier,
+    onButtonClick: () -> Unit,
+    onTeamSelected: (Team) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Button(
+            onClick = onButtonClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isSelected) Color(0xFF1565C0) else Color(0xFF001666)
+            ),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = teamName,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                IconButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Desplegar equipos",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .heightIn(max = 250.dp)
+                .background(Color(0xFF001254))
+        ) {
+            if (teamsList.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Sin equipos registrados", color = Color.Gray) },
+                    enabled = false,
+                    onClick = {}
+                )
+            } else {
+                teamsList.forEach { team ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = team.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        onClick = {
+                            onTeamSelected(team)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -692,7 +893,7 @@ fun PosDescription(sigla: String, nombre: String) {
     }
 }
 
-// Diálogo Emergente del Rombo con Botón (?) de Glosario de Siglas en la Esquina Superior Derecha
+// Diálogo Emergente del Rombo con Botón (?) de Glosario de Siglas
 @Composable
 fun BaseAnnotationDialog(
     initialState: BaseState,
@@ -701,6 +902,23 @@ fun BaseAnnotationDialog(
 ) {
     var state by remember { mutableStateOf(initialState) }
     var showDiamondHelpDialog by remember { mutableStateOf(false) }
+
+    fun applyQuickPlay(play: String) {
+        val isAlreadySelected = state.playType == play
+        if (isAlreadySelected) {
+            state = state.copy(playType = null, outNumber = 0)
+        } else {
+            state = when (play) {
+                "H1", "BB" -> state.copy(playType = play, firstBase = true, secondBase = false, thirdBase = false, homeBase = false, outNumber = 0)
+                "H2"       -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = false, homeBase = false, outNumber = 0)
+                "H3"       -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = true, homeBase = false, outNumber = 0)
+                "HR"       -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = true, homeBase = true, outNumber = 0)
+                "K"        -> state.copy(playType = play, outNumber = 1)
+                "2P"       -> state.copy(playType = play, outNumber = 2)
+                else       -> state.copy(playType = play)
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -713,7 +931,6 @@ fun BaseAnnotationDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Encabezado con título e ícono (?)
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -736,7 +953,6 @@ fun BaseAnnotationDialog(
                     }
                 }
 
-                // Rombo interactivo con botones
                 Box(
                     modifier = Modifier.size(200.dp),
                     contentAlignment = Alignment.Center
@@ -752,32 +968,52 @@ fun BaseAnnotationDialog(
                         text = "2ª B",
                         isActive = state.secondBase,
                         modifier = Modifier.align(Alignment.TopCenter),
-                        onClick = { state = state.copy(secondBase = !state.secondBase) }
-                    )
-
-                    BaseButton(
-                        text = "3ª B",
-                        isActive = state.thirdBase,
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                        onClick = { state = state.copy(thirdBase = !state.thirdBase) }
+                        onClick = {
+                            val newSecond = !state.secondBase
+                            state = state.copy(
+                                secondBase = newSecond,
+                                firstBase = if (newSecond) true else state.firstBase
+                            )
+                        }
                     )
 
                     BaseButton(
                         text = "1ª B",
                         isActive = state.firstBase,
-                        modifier = Modifier.align(Alignment.CenterStart),
+                        modifier = Modifier.align(Alignment.CenterEnd),
                         onClick = { state = state.copy(firstBase = !state.firstBase) }
+                    )
+
+                    BaseButton(
+                        text = "3ª B",
+                        isActive = state.thirdBase,
+                        modifier = Modifier.align(Alignment.CenterStart),
+                        onClick = {
+                            val newThird = !state.thirdBase
+                            state = state.copy(
+                                thirdBase = newThird,
+                                firstBase = if (newThird) true else state.firstBase,
+                                secondBase = if (newThird) true else state.secondBase
+                            )
+                        }
                     )
 
                     BaseButton(
                         text = "Home",
                         isActive = state.homeBase,
                         modifier = Modifier.align(Alignment.BottomCenter),
-                        onClick = { state = state.copy(homeBase = !state.homeBase) }
+                        onClick = {
+                            val newHome = !state.homeBase
+                            state = state.copy(
+                                homeBase = newHome,
+                                firstBase = if (newHome) true else state.firstBase,
+                                secondBase = if (newHome) true else state.secondBase,
+                                thirdBase = if (newHome) true else state.thirdBase
+                            )
+                        }
                     )
                 }
 
-                // Botones directos por sigla (Solo guardan el tipo de jugada, NO alteran las bases)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -787,30 +1023,25 @@ fun BaseAnnotationDialog(
                             text = "H1",
                             isSelected = state.playType == "H1",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(playType = if (state.playType == "H1") null else "H1")
-                        }
+                        ) { applyQuickPlay("H1") }
+
                         QuickActionButton(
                             text = "H2",
                             isSelected = state.playType == "H2",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(playType = if (state.playType == "H2") null else "H2")
-                        }
+                        ) { applyQuickPlay("H2") }
+
                         QuickActionButton(
                             text = "H3",
                             isSelected = state.playType == "H3",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(playType = if (state.playType == "H3") null else "H3")
-                        }
+                        ) { applyQuickPlay("H3") }
+
                         QuickActionButton(
                             text = "HR",
                             isSelected = state.playType == "HR",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(playType = if (state.playType == "HR") null else "HR")
-                        }
+                        ) { applyQuickPlay("HR") }
                     }
 
                     Row(
@@ -821,34 +1052,28 @@ fun BaseAnnotationDialog(
                             text = "BB",
                             isSelected = state.playType == "BB",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(playType = if (state.playType == "BB") null else "BB")
-                        }
+                        ) { applyQuickPlay("BB") }
+
                         QuickActionButton(
                             text = "K",
                             isSelected = state.playType == "K",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(
-                                playType = if (state.playType == "K") null else "K",
-                                outNumber = if (state.playType != "K") 1 else 0
-                            )
-                        }
+                        ) { applyQuickPlay("K") }
+
                         QuickActionButton(
                             text = "2P",
                             isSelected = state.playType == "2P",
                             modifier = Modifier.weight(1f)
-                        ) {
-                            state = state.copy(
-                                playType = if (state.playType == "2P") null else "2P",
-                                outNumber = if (state.playType != "2P") 2 else 0
-                            )
-                        }
+                        ) { applyQuickPlay("2P") }
                     }
                 }
 
+                // FIX: Guardar estado y descartar el diálogo explícitamente
                 Button(
-                    onClick = { onSave(state) },
+                    onClick = {
+                        onSave(state)
+                        onDismiss()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
