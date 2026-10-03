@@ -28,18 +28,12 @@ class PlayersViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private var currentTeamId: String = "general"
+    private var currentTeamId: String? = null
 
-    /**
-     * Obtiene el ID del usuario actualmente autenticado en Supabase Auth
-     */
     private fun getCurrentUserId(): String? {
         return client.auth.currentUserOrNull()?.id
     }
 
-    /**
-     * Comprueba si una cadena tiene el formato adecuado de UUID
-     */
     private fun String?.isValidUuid(): Boolean {
         if (this.isNullOrBlank()) return false
         return try {
@@ -50,9 +44,6 @@ class PlayersViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Sube un archivo de imagen al bucket "player_photos" en Supabase Storage
-     */
     private suspend fun uploadPhotoToSupabase(context: Context, uri: Uri): String? {
         return withContext(Dispatchers.IO) {
             try {
@@ -75,10 +66,6 @@ class PlayersViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Carga los jugadores del usuario actual autenticado.
-     * Si teamId es un UUID válido, filtra por ese equipo.
-     */
     fun loadPlayersByTeam(teamId: String) {
         currentTeamId = teamId
         viewModelScope.launch(Dispatchers.IO) {
@@ -91,13 +78,16 @@ class PlayersViewModel : ViewModel() {
                     return@launch
                 }
 
+                if (!teamId.isValidUuid()) {
+                    _players.value = emptyList()
+                    return@launch
+                }
+
                 val list = client.postgrest["players"]
                     .select {
                         filter {
                             eq("user_id", userId)
-                            if (teamId.isValidUuid()) {
-                                eq("team_id", teamId)
-                            }
+                            eq("team_id", teamId)
                         }
                     }
                     .decodeList<Player>()
@@ -112,10 +102,7 @@ class PlayersViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Agrega un nuevo jugador vinculándolo al user_id del usuario con sesión activa.
-     */
-    fun addPlayer(context: Context, name: String, number: String, position: String, photoUri: Uri?, teamId: String?) {
+    fun addPlayer(context: Context, name: String, photoUri: Uri?, teamId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
@@ -130,23 +117,18 @@ class PlayersViewModel : ViewModel() {
                     photoUrl = uploadPhotoToSupabase(context, photoUri)
                 }
 
-                // Asegurar que solo se pase un UUID válido o null
-                val targetTeamId = teamId ?: currentTeamId
-                val validTeamId = if (targetTeamId.isValidUuid()) targetTeamId else null
+                val validTeamId = if (teamId.isValidUuid()) teamId else null
 
                 val newPlayer = Player(
                     userId = userId,
                     teamId = validTeamId,
                     name = name,
-                    number = number.toIntOrNull(),
-                    position = position.ifBlank { null },
                     photoUrl = photoUrl
                 )
 
                 client.postgrest["players"].insert(newPlayer)
 
-                // Recarga la lista con el identificador del contexto actual
-                loadPlayersByTeam(targetTeamId)
+                loadPlayersByTeam(teamId)
             } catch (e: Exception) {
                 Log.e("PlayersViewModel", "Error al insertar jugador en Supabase", e)
             } finally {
@@ -155,11 +137,10 @@ class PlayersViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Actualiza un jugador existente respetando el user_id del propietario.
-     */
     fun updatePlayer(context: Context, player: Player, newPhotoUri: Uri?) {
         val playerId = player.id ?: return
+        val targetTeamId = player.teamId ?: currentTeamId ?: return
+
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
@@ -175,7 +156,7 @@ class PlayersViewModel : ViewModel() {
 
                 val updatedPlayer = player.copy(
                     userId = userId,
-                    teamId = if (player.teamId?.isValidUuid() == true) player.teamId else null,
+                    teamId = if (targetTeamId.isValidUuid()) targetTeamId else null,
                     photoUrl = photoUrl
                 )
 
@@ -185,7 +166,7 @@ class PlayersViewModel : ViewModel() {
                         eq("user_id", userId)
                     }
                 }
-                loadPlayersByTeam(player.teamId ?: currentTeamId)
+                loadPlayersByTeam(targetTeamId)
             } catch (e: Exception) {
                 Log.e("PlayersViewModel", "Error al actualizar jugador", e)
             } finally {
@@ -194,7 +175,7 @@ class PlayersViewModel : ViewModel() {
         }
     }
 
-    fun deletePlayer(playerId: String) {
+    fun deletePlayer(playerId: String, teamId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
@@ -206,7 +187,7 @@ class PlayersViewModel : ViewModel() {
                         eq("user_id", userId)
                     }
                 }
-                _players.value = _players.value.filter { it.id != playerId }
+                loadPlayersByTeam(teamId)
             } catch (e: Exception) {
                 Log.e("PlayersViewModel", "Error al eliminar jugador", e)
             } finally {

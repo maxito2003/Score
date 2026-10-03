@@ -43,6 +43,7 @@ val AzulMarinoBeisbol = Color(0xFF000B3B)
 fun PlayersScreen(
     teamId: String,
     teamName: String,
+    mode: String = "LIGA",
     onBack: () -> Unit,
     viewModel: PlayersViewModel = viewModel(),
     teamsViewModel: TeamsViewModel = viewModel()
@@ -52,19 +53,39 @@ fun PlayersScreen(
     val teamsList by teamsViewModel.teams.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    var selectedTeam by remember { mutableStateOf<Team?>(null) }
+    var expandedDropdown by remember { mutableStateOf(false) }
+
     var isAddingPlayer by remember { mutableStateOf(false) }
     var editingPlayer by remember { mutableStateOf<Player?>(null) }
     var playerToDelete by remember { mutableStateOf<Player?>(null) }
-
-    LaunchedEffect(teamId) {
-        teamsViewModel.loadTeams()
-        viewModel.loadPlayersByTeam(teamId)
+    LaunchedEffect(key1 = mode) {
+        teamsViewModel.loadTeams(groupId = mode)
     }
+
+    LaunchedEffect(teamsList) {
+        if (selectedTeam == null && teamsList.isNotEmpty()) {
+            val initial = teamsList.find { it.id == teamId } ?: teamsList.firstOrNull()
+            selectedTeam = initial
+            initial?.id?.let { viewModel.loadPlayersByTeam(it) }
+        }
+    }
+
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedBorderColor = Color(0xFF64B5F6),
+        unfocusedBorderColor = Color(0xFF1A2A70),
+        focusedLabelColor = Color.White,
+        unfocusedLabelColor = Color.LightGray,
+        focusedContainerColor = Color(0xFF000833),
+        unfocusedContainerColor = Color(0xFF000833)
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Jugadores: $teamName", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text("Jugadores ($mode)", color = Color.White, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Regresar", tint = Color.White)
@@ -76,8 +97,8 @@ fun PlayersScreen(
         floatingActionButton = {
             if (!isAddingPlayer && editingPlayer == null) {
                 FloatingActionButton(
-                    onClick = { isAddingPlayer = true },
-                    containerColor = Color(0xFF1565C0),
+                    onClick = { if (selectedTeam != null) isAddingPlayer = true },
+                    containerColor = if (selectedTeam != null) Color(0xFF1565C0) else Color.Gray,
                     contentColor = Color.White
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Agregar Jugador")
@@ -86,29 +107,79 @@ fun PlayersScreen(
         },
         containerColor = AzulMarinoBeisbol
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Desplegable superior para seleccionar el equipo del modo actual
+            ExposedDropdownMenuBox(
+                expanded = expandedDropdown,
+                onExpandedChange = { expandedDropdown = !expandedDropdown },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedTeam?.name ?: "Seleccione un equipo",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Equipo ($mode)") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
+                    colors = textFieldColors,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+
+                ExposedDropdownMenu(
+                    expanded = expandedDropdown,
+                    onDismissRequest = { expandedDropdown = false },
+                    modifier = Modifier.background(Color(0xFF001254))
+                ) {
+                    if (teamsList.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No hay equipos en $mode", color = Color.LightGray) },
+                            onClick = { expandedDropdown = false }
+                        )
+                    } else {
+                        teamsList.forEach { team ->
+                            DropdownMenuItem(
+                                text = { Text(team.name, color = Color.White) },
+                                onClick = {
+                                    selectedTeam = team
+                                    expandedDropdown = false
+                                    team.id?.let { viewModel.loadPlayersByTeam(it) }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             if (isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(0xFF64B5F6))
             }
 
-            if (isAddingPlayer) {
+            if (selectedTeam == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Por favor, selecciona un equipo para ver y agregar jugadores.",
+                        color = Color.LightGray,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else if (isAddingPlayer) {
                 PlayerForm(
-                    teamsList = teamsList,
-                    initialTeamId = if (teamId != "general") teamId else null,
-                    onSave = { name, number, position, selectedTeamId, photoUri ->
-                        viewModel.addPlayer(
-                            context = context,
-                            name = name,
-                            number = number,
-                            position = position,
-                            photoUri = photoUri,
-                            teamId = selectedTeamId
-                        )
+                    onSave = { name, photoUri ->
+                        selectedTeam?.id?.let { tId ->
+                            viewModel.addPlayer(
+                                context = context,
+                                name = name,
+                                photoUri = photoUri,
+                                teamId = tId
+                            )
+                        }
                         isAddingPlayer = false
                     },
                     onCancel = { isAddingPlayer = false }
@@ -116,7 +187,7 @@ fun PlayersScreen(
             } else {
                 if (playersList.isEmpty() && !isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No hay jugadores registrados.", color = Color.LightGray)
+                        Text("No hay jugadores registrados para este equipo.", color = Color.LightGray)
                     }
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -148,18 +219,12 @@ fun PlayersScreen(
                     Text("Editar Jugador", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
                     PlayerForm(
-                        teamsList = teamsList,
                         initialName = player.name,
-                        initialNumber = player.number?.toString() ?: "",
-                        initialPosition = player.position ?: "",
-                        initialTeamId = player.teamId,
                         initialPhotoUrl = player.photoUrl,
-                        onSave = { name, number, position, selectedTeamId, photoUri ->
+                        onSave = { name, photoUri ->
                             val updatedPlayer = player.copy(
                                 name = name,
-                                number = number.toIntOrNull(),
-                                position = position,
-                                teamId = selectedTeamId
+                                teamId = selectedTeam?.id
                             )
                             viewModel.updatePlayer(
                                 context = context,
@@ -189,7 +254,9 @@ fun PlayersScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        player.id?.let { id -> viewModel.deletePlayer(id) }
+                        player.id?.let { id ->
+                            selectedTeam?.id?.let { tId -> viewModel.deletePlayer(id, tId) }
+                        }
                         playerToDelete = null
                     }
                 ) {
@@ -249,29 +316,13 @@ fun PlayerCardItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = player.name,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Text(
-                    text = "Posición: ${player.position ?: "N/A"}",
-                    color = Color(0xFF64B5F6),
-                    fontSize = 14.sp
-                )
-            }
-
-            if (player.number != null) {
-                Text(
-                    text = "#${player.number}",
-                    color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 20.sp,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-            }
+            Text(
+                text = player.name,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                modifier = Modifier.weight(1f)
+            )
 
             IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                 Icon(
@@ -294,24 +345,15 @@ fun PlayerCardItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerForm(
-    teamsList: List<Team>,
     initialName: String = "",
-    initialNumber: String = "",
-    initialPosition: String = "",
-    initialTeamId: String? = null,
     initialPhotoUrl: String? = null,
-    onSave: (name: String, number: String, position: String, selectedTeamId: String?, photoUri: Uri?) -> Unit,
+    onSave: (name: String, photoUri: Uri?) -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initialName) }
-    var number by remember { mutableStateOf(initialNumber) }
-    var position by remember { mutableStateOf(initialPosition) }
-    var selectedTeamId by remember { mutableStateOf(initialTeamId) }
-    var expandedDropdown by remember { mutableStateOf(false) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -340,8 +382,6 @@ fun PlayerForm(
         focusedContainerColor = Color(0xFF000833),
         unfocusedContainerColor = Color(0xFF000833)
     )
-
-    val selectedTeamName = teamsList.find { it.id == selectedTeamId }?.name ?: "Sin equipo asignado"
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -392,64 +432,6 @@ fun PlayerForm(
             modifier = Modifier.fillMaxWidth()
         )
 
-        OutlinedTextField(
-            value = number,
-            onValueChange = { number = it },
-            label = { Text("Número de Camiseta") },
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = position,
-            onValueChange = { position = it },
-            label = { Text("Posición (ej. Pitcher, Catcher)") },
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Menu desplegable para seleccionar equipo
-        ExposedDropdownMenuBox(
-            expanded = expandedDropdown,
-            onExpandedChange = { expandedDropdown = !expandedDropdown },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = selectedTeamName,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Equipo Asignado") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
-                colors = textFieldColors,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor()
-            )
-
-            ExposedDropdownMenu(
-                expanded = expandedDropdown,
-                onDismissRequest = { expandedDropdown = false },
-                modifier = Modifier.background(Color(0xFF001254))
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Sin equipo asignado", color = Color.White) },
-                    onClick = {
-                        selectedTeamId = null
-                        expandedDropdown = false
-                    }
-                )
-                teamsList.forEach { team ->
-                    DropdownMenuItem(
-                        text = { Text(team.name, color = Color.White) },
-                        onClick = {
-                            selectedTeamId = team.id
-                            expandedDropdown = false
-                        }
-                    )
-                }
-            }
-        }
-
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onCancel,
@@ -459,7 +441,7 @@ fun PlayerForm(
                 Text("Cancelar", color = Color.White)
             }
             Button(
-                onClick = { if (name.isNotBlank()) onSave(name, number, position, selectedTeamId, photoUri) },
+                onClick = { if (name.isNotBlank()) onSave(name, photoUri) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
                 modifier = Modifier.weight(1f)
             ) {

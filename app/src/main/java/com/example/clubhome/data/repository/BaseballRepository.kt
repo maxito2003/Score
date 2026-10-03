@@ -23,14 +23,13 @@ class BaseballRepository {
     }
 
     // --- EQUIPOS ---
-    // --- EQUIPOS ---
     suspend fun getTeams(groupId: String? = null, userId: String? = null): List<Team> {
         return client.postgrest["teams"].select {
             filter {
-                if (groupId != null) {
+                if (!groupId.isNullOrBlank()) {
                     eq("group_id", groupId)
                 }
-                if (userId != null) {
+                if (!userId.isNullOrBlank()) {
                     eq("user_id", userId)
                 }
             }
@@ -43,11 +42,37 @@ class BaseballRepository {
         }.decodeSingle<Team>()
     }
 
+    // Agregado: Permite actualizar el nombre, coach o logo de un equipo existente
+    suspend fun updateTeam(team: Team) {
+        team.id?.let { teamId ->
+            client.postgrest["teams"].update(team) {
+                filter {
+                    eq("id", teamId)
+                }
+            }
+        }
+    }
+
+    // Agregado: Permite eliminar un equipo por su ID
+    suspend fun deleteTeam(teamId: String, userId: String? = null) {
+        client.postgrest["teams"].delete {
+            filter {
+                eq("id", teamId)
+                if (!userId.isNullOrBlank()) {
+                    eq("user_id", userId)
+                }
+            }
+        }
+    }
+
     // --- JUGADORES ---
-    suspend fun getPlayersByTeam(teamId: String): List<Player> {
+    suspend fun getPlayersByTeam(teamId: String, userId: String? = null): List<Player> {
         return client.postgrest["players"].select {
             filter {
                 eq("team_id", teamId)
+                if (!userId.isNullOrBlank()) {
+                    eq("user_id", userId)
+                }
             }
         }.decodeList<Player>()
     }
@@ -58,17 +83,40 @@ class BaseballRepository {
         }.decodeSingle<Player>()
     }
 
-    // --- PARTIDOS ---
-    suspend fun getMatches(groupId: String? = null): List<Match> {
-        return if (groupId != null) {
-            client.postgrest["matches"].select {
+    suspend fun updatePlayer(player: Player) {
+        player.id?.let { playerId ->
+            client.postgrest["players"].update(player) {
                 filter {
-                    eq("group_id", groupId)
+                    eq("id", playerId)
                 }
-            }.decodeList<Match>()
-        } else {
-            client.postgrest["matches"].select().decodeList<Match>()
+            }
         }
+    }
+
+    suspend fun deletePlayer(playerId: String, userId: String? = null) {
+        client.postgrest["players"].delete {
+            filter {
+                eq("id", playerId)
+                if (!userId.isNullOrBlank()) {
+                    eq("user_id", userId)
+                }
+            }
+        }
+    }
+
+    // --- PARTIDOS ---
+    suspend fun getMatches(mode: String? = null, userId: String? = null): List<Match> {
+        return client.postgrest["matches"].select {
+            filter {
+                // Corregido: La columna en la BD se llama 'mode'
+                if (!mode.isNullOrBlank()) {
+                    eq("mode", mode)
+                }
+                if (!userId.isNullOrBlank()) {
+                    eq("user_id", userId)
+                }
+            }
+        }.decodeList<Match>()
     }
 
     suspend fun createMatch(match: Match): Match {

@@ -26,7 +26,7 @@ class TeamsViewModel(
         return SupabaseClientManager.client.auth.currentUserOrNull()?.id
     }
 
-    // Carga la lista de equipos correspondientes al usuario logueado
+    // Carga la lista de equipos correspondientes al usuario logueado y al grupo/modo especificado
     fun loadTeams(groupId: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
@@ -46,16 +46,19 @@ class TeamsViewModel(
         }
     }
 
-    // Registra un nuevo equipo asignándole el user_id del usuario con sesión activa
+    // Registra o actualiza un equipo asignándole el user_id y el group_id (LIGA / PERSONAL)
     fun addTeam(team: Team, groupId: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
                 val userId = getCurrentUserId() ?: return@launch
-                val teamWithUser = team.copy(userId = userId)
+                val teamWithUser = team.copy(
+                    userId = userId,
+                    groupId = groupId
+                )
 
                 repository.createTeam(teamWithUser)
-                loadTeams(groupId) // Recarga para actualizar la UI
+                loadTeams(groupId) // Recarga los equipos filtrados por el grupo actual
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

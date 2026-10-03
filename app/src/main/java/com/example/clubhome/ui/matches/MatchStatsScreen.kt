@@ -24,13 +24,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.clubhome.data.model.Match
 import com.example.clubhome.data.remote.SupabaseClientManager
 import com.example.clubhome.ui.components.BaseballDiamond
 import com.example.clubhome.ui.game.*
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import com.example.clubhome.data.model.Match
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

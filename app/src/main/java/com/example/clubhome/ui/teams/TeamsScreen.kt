@@ -12,10 +12,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +32,6 @@ import coil.compose.AsyncImage
 import com.example.clubhome.data.model.Team
 import com.example.clubhome.ui.auth.BaseballNavy
 import com.example.clubhome.ui.auth.BaseballRed
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +42,6 @@ fun TeamsScreen(
     onSignOut: () -> Unit,
     viewModel: TeamsViewModel = viewModel()
 ) {
-    // Obtenemos los datos desde el ViewModel y Supabase
     val teamsList by viewModel.teams.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
@@ -51,179 +49,142 @@ fun TeamsScreen(
     var teamToEdit by remember { mutableStateOf<Team?>(null) }
     var teamToDelete by remember { mutableStateOf<Team?>(null) }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
-    // Cargar equipos automáticamente cuando la pantalla aparece
-    LaunchedEffect(Unit) {
-        viewModel.loadTeams()
+    // Cargar equipos filtrados por el modo actual (LIGA o PERSONAL)
+    LaunchedEffect(modeTitle) {
+        viewModel.loadTeams(groupId = modeTitle)
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(drawerContainerColor = BaseballNavy) {
-                Spacer(modifier = Modifier.height(24.dp))
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateHome()
-                    }
-                ) {
-                    Text("Home", color = Color.White, fontSize = 20.sp)
-                }
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateMatch()
-                    }
-                ) {
-                    Text("Partido", color = Color.White, fontSize = 20.sp)
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onSignOut()
-                    }
-                ) {
-                    Text("Cerrar Sesión", color = Color.White, fontSize = 18.sp)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when {
+                                isAddingNewTeam -> "Nuevo Equipo"
+                                teamToEdit != null -> "Editar Equipo"
+                                else -> "Equipos"
+                            },
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Box(
+                            modifier = Modifier
+                                .background(BaseballRed, shape = RoundedCornerShape(4.dp))
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = when {
-                                    isAddingNewTeam -> "Nuevo Equipo"
-                                    teamToEdit != null -> "Editar Equipo"
-                                    else -> "Equipos"
-                                },
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .background(BaseballRed, shape = RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = modeTitle.uppercase(),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Menú",
-                                tint = Color.White
+                                text = modeTitle.uppercase(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Black
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
-                )
-            },
-            floatingActionButton = {
-                if (!isAddingNewTeam && teamToEdit == null) {
-                    FloatingActionButton(
-                        onClick = { isAddingNewTeam = true },
-                        containerColor = Color(0xFF1565C0),
-                        contentColor = Color.White
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Agregar Equipo")
                     }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateMatch) { // <-- Llama a onNavigateMatch para ir al partido
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Regresar al partido",
+                            tint = Color.White
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
+            )
+        },
+        floatingActionButton = {
+            if (!isAddingNewTeam && teamToEdit == null) {
+                FloatingActionButton(
+                    onClick = { isAddingNewTeam = true },
+                    containerColor = Color(0xFF1565C0),
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Agregar Equipo")
                 }
-            },
-            containerColor = BaseballNavy
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-            ) {
-                if (isLoading) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color.White
+            }
+        },
+        containerColor = BaseballNavy
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            if (isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White
+                )
+            }
+
+            when {
+                isAddingNewTeam -> {
+                    TeamForm(
+                        teamToEdit = null,
+                        onSave = { name, coach, imageUri ->
+                            if (name.isNotBlank()) {
+                                val newTeam = Team(
+                                    name = name,
+                                    coach = coach,
+                                    logoUrl = imageUri?.toString(),
+                                    groupId = modeTitle
+                                )
+                                viewModel.addTeam(newTeam, groupId = modeTitle)
+                            }
+                            isAddingNewTeam = false
+                        },
+                        onCancel = { isAddingNewTeam = false }
                     )
                 }
-
-                when {
-                    isAddingNewTeam -> {
-                        TeamForm(
-                            teamToEdit = null,
-                            onSave = { name, coach, imageUri ->
-                                if (name.isNotBlank()) {
-                                    // Crear y enviar el objeto a Supabase a través del ViewModel
-                                    val newTeam = Team(
-                                        name = name,
-                                        coach = coach,
-                                        logoUrl = imageUri?.toString()
-                                    )
-                                    viewModel.addTeam(newTeam)
-                                }
-                                isAddingNewTeam = false
-                            },
-                            onCancel = { isAddingNewTeam = false }
-                        )
-                    }
-                    teamToEdit != null -> {
-                        TeamForm(
-                            teamToEdit = teamToEdit,
-                            onSave = { name, coach, imageUri ->
-                                teamToEdit?.let { current ->
-                                    val updatedTeam = current.copy(
-                                        name = name,
-                                        coach = coach,
-                                        logoUrl = imageUri?.toString()
-                                    )
-                                    viewModel.addTeam(updatedTeam)
-                                }
-                                teamToEdit = null
-                            },
-                            onCancel = { teamToEdit = null }
-                        )
-                    }
-                    else -> {
-                        if (teamsList.isEmpty() && !isLoading) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No hay equipos registrados.\nToca el botón + para agregar uno.",
-                                    color = Color.Gray,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
+                teamToEdit != null -> {
+                    TeamForm(
+                        teamToEdit = teamToEdit,
+                        onSave = { name, coach, imageUri ->
+                            teamToEdit?.let { current ->
+                                val updatedTeam = current.copy(
+                                    name = name,
+                                    coach = coach,
+                                    logoUrl = imageUri?.toString(),
+                                    groupId = modeTitle
                                 )
+                                viewModel.addTeam(updatedTeam, groupId = modeTitle)
                             }
-                        } else {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(teamsList, key = { it.id ?: it.hashCode().toString() }) { team ->
-                                    TeamCardItem(
-                                        team = team,
-                                        onEdit = { teamToEdit = team },
-                                        onDelete = { teamToDelete = team }
-                                    )
-                                }
+                            teamToEdit = null
+                        },
+                        onCancel = { teamToEdit = null }
+                    )
+                }
+                else -> {
+                    if (teamsList.isEmpty() && !isLoading) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No hay equipos registrados en $modeTitle.\nToca el botón + para agregar uno.",
+                                color = Color.Gray,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(teamsList, key = { it.id ?: it.hashCode().toString() }) { team ->
+                                TeamCardItem(
+                                    team = team,
+                                    onEdit = { teamToEdit = team },
+                                    onDelete = { teamToDelete = team }
+                                )
                             }
                         }
                     }
@@ -232,7 +193,6 @@ fun TeamsScreen(
         }
     }
 
-    // Diálogo de confirmación para eliminar
     if (teamToDelete != null) {
         AlertDialog(
             onDismissRequest = { teamToDelete = null },
@@ -246,7 +206,6 @@ fun TeamsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        // Aquí puedes añadir la lógica de eliminación en el ViewModel cuando la implementes
                         teamToDelete = null
                     }
                 ) {
@@ -278,7 +237,6 @@ fun TeamCardItem(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Imagen en formato Banner
             if (!team.logoUrl.isNullOrEmpty()) {
                 AsyncImage(
                     model = team.logoUrl,
@@ -306,7 +264,6 @@ fun TeamCardItem(
                 }
             }
 
-            // Datos del equipo y botones
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

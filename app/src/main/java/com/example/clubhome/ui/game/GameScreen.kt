@@ -1,6 +1,8 @@
 package com.example.clubhome.ui.game
 
 import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +13,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Pause
@@ -21,32 +24,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.clubhome.data.model.Match
+import com.example.clubhome.data.model.Team
 import com.example.clubhome.data.remote.SupabaseClientManager
 import com.example.clubhome.ui.auth.BaseballNavy
 import com.example.clubhome.ui.auth.BaseballRed
 import com.example.clubhome.ui.components.BaseballDiamond
+import com.example.clubhome.ui.matches.PosDescription
+import com.example.clubhome.ui.matches.ReadOnlyCounter
 import com.example.clubhome.ui.players.PlayersViewModel
+import com.example.clubhome.ui.teams.TeamsViewModel
 import io.github.jan.supabase.postgrest.postgrest
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import com.example.clubhome.ui.matches.ReadOnlyCounter
-import com.example.clubhome.ui.matches.PosDescription
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.ui.text.style.TextOverflow
-import com.example.clubhome.data.model.Team
-import com.example.clubhome.ui.teams.TeamsViewModel
+import androidx.compose.material.icons.filled.Add
+import java.util.UUID
+import com.example.clubhome.data.model.Match
 val AzulMarinoBeisbol = Color(0xFF000B3B)
 val CELL_SIZE = 48.dp
 
@@ -89,24 +91,18 @@ fun GameScreen(
     teamsViewModel: TeamsViewModel = viewModel(),
     gameViewModel: GameViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     val playersList by playersViewModel.players.collectAsState()
     val isLoadingPlayers by playersViewModel.isLoading.collectAsState()
-
-    // Cargar equipos registrados desde TeamsViewModel
     val teamsList by teamsViewModel.teams.collectAsState()
 
-    // Identificar el nombre del equipo seleccionado actualmente en la interfaz
     val activeTeamName = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Name else gameViewModel.team2Name
-
-    // Buscar el equipo activo dentro de la lista completa para obtener su ID (UUID)
     val activeTeam = remember(teamsList, activeTeamName) {
         teamsList.find { it.name.equals(activeTeamName, ignoreCase = true) }
     }
-
-    // Filtrar estrictamente la lista de nombres por los jugadores que pertenecen al equipo activo
     val registeredPlayerNames by remember(playersList, activeTeam) {
         derivedStateOf {
             if (activeTeam != null) {
@@ -122,15 +118,36 @@ fun GameScreen(
     var showPosHelpDialog by remember { mutableStateOf(false) }
     var showFinishMatchDialog by remember { mutableStateOf(false) }
     var activeDialogCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var totalInnings by remember { mutableStateOf(10) }
 
-    // Inicializaciones al montar la pantalla
+    // Usamos Unit como clave para que SOLO se ejecute UNA VEZ cuando la pantalla se crea por primera vez.
     LaunchedEffect(Unit) {
-        teamsViewModel.loadTeams()
-        gameViewModel.initializeLineups()
+        teamsViewModel.loadTeams(modeTitle)
 
-        // Solo crea el registro en Supabase si NO hay un partido activo cargado en el ViewModel
+        // Verificación estricta: Si ya existe un matchId en el ViewModel compartido, NO reiniciamos nada.
         if (gameViewModel.currentMatchId == null) {
+            Log.d("GameScreen", "Iniciando NUEVO partido para $modeTitle")
+
+            gameViewModel.team1Name = "Seleccionar"
+            gameViewModel.team2Name = "Seleccionar"
+            gameViewModel.team1Hits = 0
+            gameViewModel.team2Hits = 0
+            gameViewModel.team1Errors = 0
+            gameViewModel.team2Errors = 0
+            gameViewModel.team1Outs = 0
+            gameViewModel.team2Outs = 0
+            gameViewModel.team1HomeRuns = 0
+            gameViewModel.team2HomeRuns = 0
+            gameViewModel.elapsedSeconds = 0
+            if (gameViewModel.isTimerRunning) {
+                gameViewModel.toggleTimer()
+            }
+            totalInnings = 10
+            gameViewModel.initializeLineups(forceReset = true)
+
             try {
+                val matchCode = gameViewModel.generateMatchCode()
+
                 val initialPayload = LineupDataPayload(
                     team1Lineup = gameViewModel.team1Lineup.toList(),
                     team2Lineup = gameViewModel.team2Lineup.toList(),
@@ -138,6 +155,7 @@ fun GameScreen(
                 )
                 val initialJson = Json.encodeToString(initialPayload)
                 val newMatch = Match(
+                    code = matchCode,
                     mode = modeTitle,
                     homeTeam = gameViewModel.team1Name,
                     awayTeam = gameViewModel.team2Name,
@@ -147,7 +165,8 @@ fun GameScreen(
                     hits = 0,
                     errors = 0,
                     outs = 0,
-                    homeRuns = 0
+                    homeRuns = 0,
+                    durationSeconds = 0
                 )
                 val insertedMatch = SupabaseClientManager.client.postgrest["matches"]
                     .insert(newMatch) {
@@ -156,13 +175,21 @@ fun GameScreen(
                     .decodeSingle<Match>()
 
                 gameViewModel.currentMatchId = insertedMatch.id
+                gameViewModel.matchCode = insertedMatch.code ?: matchCode
             } catch (e: Exception) {
-                Log.e("GameScreen", "Error al crear el partido inicial", e)
+                Log.e("GameScreen", "Error al crear el partido inicial para el modo $modeTitle", e)
             }
+        } else {
+            Log.d("GameScreen", "Conservando partido existente con ID: ${gameViewModel.currentMatchId}")
         }
     }
 
-    // Cargar jugadores reactivamente según el equipo que esté activo en pantalla
+    LaunchedEffect(gameViewModel.matchCode) {
+        gameViewModel.matchCode?.let { code ->
+            gameViewModel.listenToMatchRealtime(code)
+        }
+    }
+
     LaunchedEffect(activeTeam?.id) {
         val teamIdToLoad = activeTeam?.id
         if (!teamIdToLoad.isNullOrEmpty()) {
@@ -175,7 +202,6 @@ fun GameScreen(
     val minutes = gameViewModel.elapsedSeconds / 60
     val seconds = gameViewModel.elapsedSeconds % 60
     val timeFormatted = String.format("%02d:%02d", minutes, seconds)
-
     val activeLineup = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Lineup else gameViewModel.team2Lineup
 
     val calculatedRunsTeam1 = gameViewModel.team1Lineup.sumOf { player -> player.innings.count { it.isRun } }
@@ -189,16 +215,12 @@ fun GameScreen(
 
     fun syncToSupabase(status: String = "LIVE") {
         val matchId = gameViewModel.currentMatchId ?: return
-
-        // Usamos LineupDataPayload explícitamente para evitar el error "Serializer for class Any"
         val payload = LineupDataPayload(
             team1Lineup = gameViewModel.team1Lineup.toList(),
             team2Lineup = gameViewModel.team2Lineup.toList(),
             durationSeconds = gameViewModel.elapsedSeconds
         )
-
         val jsonLineup = Json.encodeToString(payload)
-
         scope.launch(Dispatchers.IO) {
             try {
                 SupabaseClientManager.client.postgrest["matches"]
@@ -212,6 +234,7 @@ fun GameScreen(
                         set("home_runs", currentHomeRuns)
                         set("runs", currentCalculatedRuns)
                         set("status", status)
+                        set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
                     }) {
                         filter { eq("id", matchId) }
                     }
@@ -222,7 +245,9 @@ fun GameScreen(
     }
 
     fun finishMatch() {
-        gameViewModel.pauseTimer()
+        if (gameViewModel.isTimerRunning) {
+            gameViewModel.toggleTimer()
+        }
         syncToSupabase(status = "FINISHED")
         onNavigateFinishedGames()
     }
@@ -233,50 +258,22 @@ fun GameScreen(
             ModalDrawerSheet(drawerContainerColor = BaseballNavy) {
                 Spacer(modifier = Modifier.height(24.dp))
 
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateHome()
-                    }
-                ) {
+                TextButton(onClick = { scope.launch { drawerState.close() }; onNavigateHome() }) {
                     Text("Home", color = Color.White, fontSize = 20.sp)
                 }
-
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateTeams()
-                    }
-                ) {
+                TextButton(onClick = { scope.launch { drawerState.close() }; onNavigateTeams() }) {
                     Text("Equipos", color = Color.White, fontSize = 20.sp)
                 }
-
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigatePlayers()
-                    }
-                ) {
+                TextButton(onClick = { scope.launch { drawerState.close() }; onNavigatePlayers() }) {
                     Text("Jugadores", color = Color.White, fontSize = 20.sp)
                 }
-
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onNavigateFinishedGames()
-                    }
-                ) {
+                TextButton(onClick = { scope.launch { drawerState.close() }; onNavigateFinishedGames() }) {
                     Text("Partidos Terminados", color = Color.White, fontSize = 20.sp)
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                TextButton(
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onSignOut()
-                    }
-                ) {
+                TextButton(onClick = { scope.launch { drawerState.close() }; onSignOut() }) {
                     Text("Cerrar Sesión", color = Color.White, fontSize = 18.sp)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -294,30 +291,52 @@ fun GameScreen(
                         ) {
                             Text(
                                 text = "Partido",
-                                fontSize = 22.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
+
+                            Surface(
+                                color = Color(0xFF001254),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, Color(0xFF1A2A70)),
+                                modifier = Modifier.clickable {
+                                    val code = gameViewModel.matchCode ?: "------"
+                                    Toast.makeText(context, "Código del partido: $code", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text("CÓDIGO: ", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = gameViewModel.matchCode ?: "------",
+                                        color = Color(0xFFFFEB3B),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .background(BaseballRed, shape = RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     text = modeTitle.uppercase(),
                                     color = Color.White,
-                                    fontWeight = FontWeight.Black
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp
                                 )
                             }
                         }
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Menú",
-                                tint = Color.White
-                            )
+                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Menú", tint = Color.White)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
@@ -352,11 +371,10 @@ fun GameScreen(
                         ) {
                             Text("Terminar", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-
                         Surface(
                             color = Color(0xFF001254),
                             shape = RoundedCornerShape(20.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1A2A70))
+                            border = BorderStroke(1.dp, Color(0xFF1A2A70))
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -473,7 +491,7 @@ fun GameScreen(
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF000E4A),
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1A2A70))
+                    border = BorderStroke(1.dp, Color(0xFF1A2A70))
                 ) {
                     val tableHorizontalScrollState = rememberScrollState()
 
@@ -503,9 +521,11 @@ fun GameScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
-
-                            Row(modifier = Modifier.horizontalScroll(tableHorizontalScrollState)) {
-                                for (i in 1..10) {
+                            Row(
+                                modifier = Modifier.horizontalScroll(tableHorizontalScrollState),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                for (i in 1..totalInnings) {
                                     Box(
                                         modifier = Modifier
                                             .width(CELL_SIZE)
@@ -521,11 +541,22 @@ fun GameScreen(
                                         )
                                     }
                                 }
+                                Box(
+                                    modifier = Modifier
+                                        .size(CELL_SIZE)
+                                        .clickable { totalInnings++ },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Agregar Entrada",
+                                        tint = Color(0xFF4CAF50),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
-
                         HorizontalDivider(color = Color(0xFF1A2A70))
-
                         if (isLoadingPlayers && registeredPlayerNames.isEmpty()) {
                             Box(
                                 modifier = Modifier
@@ -539,7 +570,6 @@ fun GameScreen(
                             LazyColumn(modifier = Modifier.weight(1f)) {
                                 itemsIndexed(activeLineup) { playerIdx, player ->
                                     var expandedMenu by remember { mutableStateOf(false) }
-
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -604,8 +634,8 @@ fun GameScreen(
                                         )
 
                                         Row(modifier = Modifier.horizontalScroll(tableHorizontalScrollState)) {
-                                            for (inningIdx in 0 until 10) {
-                                                val baseState = player.innings[inningIdx]
+                                            for (inningIdx in 0 until totalInnings) {
+                                                val baseState = player.innings.getOrElse(inningIdx) { BaseState() }
                                                 Box(
                                                     modifier = Modifier
                                                         .size(CELL_SIZE)
@@ -642,11 +672,11 @@ fun GameScreen(
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center
                             )
-
                             Row(modifier = Modifier.horizontalScroll(tableHorizontalScrollState)) {
-                                for (inningIdx in 0 until 10) {
+                                for (inningIdx in 0 until totalInnings) {
                                     val totalRunsInInning = activeLineup.sumOf { player ->
-                                        if (player.innings[inningIdx].isRun) 1 else 0
+                                        val inningState = player.innings.getOrNull(inningIdx)
+                                        if (inningState != null && inningState.isRun) 1 else 0
                                     }
                                     Box(
                                         modifier = Modifier
@@ -671,33 +701,6 @@ fun GameScreen(
         }
     }
 
-    // --- DIÁLOGO DE CONFIRMACIÓN PARA TERMINAR PARTIDO ---
-    if (showFinishMatchDialog) {
-        AlertDialog(
-            onDismissRequest = { showFinishMatchDialog = false },
-            title = { Text("Terminar Partido", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("¿Estás seguro de que deseas finalizar el partido? Se guardarán los datos finales y pasará a la sección de Partidos Terminados.", color = Color.LightGray) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showFinishMatchDialog = false
-                        finishMatch()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-                ) {
-                    Text("Finalizar", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFinishMatchDialog = false }) {
-                    Text("Cancelar", color = Color.Gray)
-                }
-            },
-            containerColor = Color(0xFF000E4A)
-        )
-    }
-
-    // --- MOSTRAR EL DIÁLOGO DE BASES AL TOCAR UNA CELDA ---
     activeDialogCell?.let { (playerIdx, inningIdx) ->
         if (playerIdx in activeLineup.indices) {
             val player = activeLineup[playerIdx]
@@ -708,18 +711,20 @@ fun GameScreen(
                 onDismiss = { activeDialogCell = null },
                 onSave = { updatedState ->
                     val updatedInnings = player.innings.toMutableList()
-                    if (inningIdx in updatedInnings.indices) {
-                        updatedInnings[inningIdx] = updatedState
-                        activeLineup[playerIdx] = player.copy(innings = updatedInnings)
-                        syncToSupabase()
+
+                    while (updatedInnings.size <= inningIdx) {
+                        updatedInnings.add(BaseState())
                     }
+
+                    updatedInnings[inningIdx] = updatedState
+                    activeLineup[playerIdx] = player.copy(innings = updatedInnings)
+                    syncToSupabase()
                     activeDialogCell = null
                 }
             )
         }
     }
 
-    // --- GLOSARIO DE POSICIONES ---
     if (showPosHelpDialog) {
         AlertDialog(
             onDismissRequest = { showPosHelpDialog = false },
@@ -747,8 +752,6 @@ fun GameScreen(
         )
     }
 
-
-    // --- DIÁLOGO DE CONFIRMACIÓN PARA TERMINAR PARTIDO ---
     if (showFinishMatchDialog) {
         AlertDialog(
             onDismissRequest = { showFinishMatchDialog = false },
@@ -781,7 +784,6 @@ fun GameScreen(
         )
     }
 }
-
 // Componente para los botones desplegables con la flechita
 @Composable
 fun TeamDropdownButton(

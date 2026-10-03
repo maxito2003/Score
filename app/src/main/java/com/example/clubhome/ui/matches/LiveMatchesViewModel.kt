@@ -2,12 +2,13 @@ package com.example.clubhome.ui.matches
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.clubhome.data.remote.SupabaseClientManager
 import com.example.clubhome.data.model.Match
+import com.example.clubhome.data.remote.SupabaseClientManager
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.PostgresAction
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,13 +27,17 @@ class LiveMatchesViewModel : ViewModel() {
         listenToMatchesRealtime()
     }
 
-    private fun loadMatches() {
-        viewModelScope.launch {
+    fun loadMatches() {
+        viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
-                // Usamos SupabaseClientManager.client
+                // Muestra los partidos que estén en vivo ("LIVE")
                 val result = SupabaseClientManager.client.postgrest["matches"]
-                    .select()
+                    .select {
+                        filter {
+                            eq("status", "LIVE")
+                        }
+                    }
                     .decodeList<Match>()
                 _matches.value = result
             } catch (e: Exception) {
@@ -44,15 +49,18 @@ class LiveMatchesViewModel : ViewModel() {
     }
 
     private fun listenToMatchesRealtime() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val channel = SupabaseClientManager.client.channel("matches_channel")
+                val channel = SupabaseClientManager.client.channel("matches_live_list")
+
+                // Escuchamos cualquier evento (INSERT, UPDATE, DELETE) en la tabla 'matches'
                 val changeFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
                     table = "matches"
                 }
 
                 channel.subscribe()
 
+                // Ante cualquier cambio en Supabase, re-consultamos los partidos activos
                 changeFlow.collect {
                     loadMatches()
                 }

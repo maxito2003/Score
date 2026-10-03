@@ -22,7 +22,6 @@ import com.example.clubhome.ui.home.HomeScreen
 import com.example.clubhome.ui.matches.FinishedGameDetailScreen
 import com.example.clubhome.ui.matches.FinishedGamesListScreen
 import com.example.clubhome.ui.matches.LiveMatchesScreen
-import com.example.clubhome.ui.matches.LiveMatchesViewModel
 import com.example.clubhome.ui.matches.MatchStatsScreen
 import com.example.clubhome.ui.players.PlayersScreen
 import com.example.clubhome.ui.splash.SplashScreen
@@ -121,16 +120,10 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
             )
         }
 
-        // Ruta de Lista de Partidos en Tiempo Real
+        // Ruta de Ingreso por Código de 6 Dígitos
         composable("matches_list") {
-            val liveViewModel: LiveMatchesViewModel = viewModel()
-            val matchesList by liveViewModel.matches.collectAsState()
-            val isLoading by liveViewModel.isLoading.collectAsState()
-
             LiveMatchesScreen(
-                matches = matchesList,
-                isLoading = isLoading,
-                onMatchClick = { matchId ->
+                onMatchFound = { matchId ->
                     if (matchId.isNotBlank()) {
                         navController.navigate("match_stats/$matchId")
                     } else {
@@ -164,7 +157,7 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
             )
         }
 
-        // Ruta para ver las Estadísticas / Detalles del Partido
+        // Ruta para ver las Estadísticas / Detalles del Partido en Tiempo Real (Espectador)
         composable(
             route = "match_stats/{matchId}",
             arguments = listOf(navArgument("matchId") { type = NavType.StringType })
@@ -177,7 +170,7 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
             )
         }
 
-        // Ruta de Partido con la Grid del Rombo
+        // Ruta de Partido Interactivo (Anotador)
         composable(
             route = "match/{mode}",
             arguments = listOf(navArgument("mode") { type = NavType.StringType })
@@ -193,10 +186,14 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
                     }
                 },
                 onNavigateTeams = {
-                    navController.navigate("teams/$modeTitle")
+                    navController.navigate("teams/$modeTitle") {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigatePlayers = {
-                    navController.navigate("players/general/General")
+                    navController.navigate("players/general/General/$modeTitle") {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateFinishedGames = {
                     navController.navigate("finished_games_list")
@@ -223,9 +220,8 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
                     }
                 },
                 onNavigateMatch = {
-                    navController.navigate("match/$modeTitle") {
-                        launchSingleTop = true
-                    }
+                    // Regresa a la pantalla del Partido existente
+                    navController.popBackStack()
                 },
                 onSignOut = {
                     authViewModel.signOut {
@@ -235,20 +231,23 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
             )
         }
 
-        // Ruta de Jugadores
+        // Ruta de Jugadores (incluye parámetro de modo LIGA/PERSONAL)
         composable(
-            route = "players/{teamId}/{teamName}",
+            route = "players/{teamId}/{teamName}/{mode}",
             arguments = listOf(
                 navArgument("teamId") { type = NavType.StringType },
-                navArgument("teamName") { type = NavType.StringType }
+                navArgument("teamName") { type = NavType.StringType },
+                navArgument("mode") { type = NavType.StringType; defaultValue = "LIGA" }
             )
         ) { backStackEntry ->
             val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
             val teamName = backStackEntry.arguments?.getString("teamName") ?: "Equipo"
+            val mode = backStackEntry.arguments?.getString("mode") ?: "LIGA"
 
             PlayersScreen(
                 teamId = teamId,
                 teamName = teamName,
+                mode = mode,
                 onBack = { navController.popBackStack() }
             )
         }
