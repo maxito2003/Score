@@ -31,7 +31,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.clubhome.ui.auth.BaseballNavy
+
+val SkyBlueBg = Color(0xFFCBE3F7)
+val DarkNavyText = Color(0xFF0A1931)
 
 @Composable
 fun AppDrawerContent(
@@ -43,14 +45,14 @@ fun AppDrawerContent(
     onCloseDrawer: () -> Unit
 ) {
     ModalDrawerSheet(
-        drawerContainerColor = BaseballNavy,
-        drawerContentColor = Color.White,
+        drawerContainerColor = SkyBlueBg,
+        drawerContentColor = DarkNavyText,
         modifier = Modifier.width(260.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .background(BaseballNavy)
+                .background(SkyBlueBg)
                 .padding(24.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -67,7 +69,7 @@ fun AppDrawerContent(
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "Cerrar Menú",
-                            tint = Color.White,
+                            tint = DarkNavyText,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -75,7 +77,7 @@ fun AppDrawerContent(
                     Icon(
                         imageVector = Icons.Default.AccountCircle,
                         contentDescription = "Perfil",
-                        tint = Color.White,
+                        tint = DarkNavyText,
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -130,7 +132,7 @@ fun AppDrawerContent(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                     contentDescription = "Cerrar sesión",
-                    tint = Color.White,
+                    tint = DarkNavyText,
                     modifier = Modifier.size(28.dp)
                 )
 
@@ -140,7 +142,7 @@ fun AppDrawerContent(
                     text = "cerrar sesion",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = DarkNavyText
                 )
             }
         }
@@ -165,7 +167,7 @@ private fun DrawerNavItem(
             text = label,
             fontSize = 22.sp,
             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-            color = Color.White
+            color = DarkNavyText
         )
     }
 }

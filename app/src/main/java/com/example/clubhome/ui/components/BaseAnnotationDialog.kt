@@ -30,13 +30,13 @@ fun BaseAnnotationDialog(
             state = state.copy(playType = null, outNumber = 0)
         } else {
             state = when (play) {
-                "H1", "BB" -> state.copy(playType = play, firstBase = true, secondBase = false, thirdBase = false, homeBase = false, outNumber = 0)
-                "H2"       -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = false, homeBase = false, outNumber = 0)
-                "H3"       -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = true, homeBase = false, outNumber = 0)
-                "HR"       -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = true, homeBase = true, outNumber = 0)
-                "K"        -> state.copy(playType = play, outNumber = 1)
-                "2P"       -> state.copy(playType = play, outNumber = 2)
-                else       -> state.copy(playType = play)
+                "H1", "BB", "BG" -> state.copy(playType = play, firstBase = true, secondBase = false, thirdBase = false, homeBase = false, outNumber = 0)
+                "H2"             -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = false, homeBase = false, outNumber = 0)
+                "H3"             -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = true, homeBase = false, outNumber = 0)
+                "HR"             -> state.copy(playType = play, firstBase = true, secondBase = true, thirdBase = true, homeBase = true, outNumber = 0)
+                "K"              -> state.copy(playType = play, outNumber = 1)
+                "2P"             -> state.copy(playType = play, outNumber = 2)
+                else             -> state.copy(playType = play)
             }
         }
     }
@@ -156,6 +156,7 @@ fun BaseAnnotationDialog(
                         QuickActionButton("BB", state.playType == "BB", Modifier.weight(1f)) { applyQuickPlay("BB") }
                         QuickActionButton("K", state.playType == "K", Modifier.weight(1f)) { applyQuickPlay("K") }
                         QuickActionButton("2P", state.playType == "2P", Modifier.weight(1f)) { applyQuickPlay("2P") }
+                        QuickActionButton("BG", state.playType == "BG", Modifier.weight(1f)) { applyQuickPlay("BG") }
                     }
                 }
 
@@ -190,6 +191,7 @@ fun BaseAnnotationDialog(
                     PosDescription("H3", "Triple (Hit de 3 Bases)")
                     PosDescription("HR", "Home Run (Jonrón / 4 Bases)")
                     PosDescription("BB", "Base por Bolas (Walk)")
+                    PosDescription("BG", "Base por Golpe (Hit by Pitch)")
                     PosDescription("K", "Ponche (Strikeout)")
                     PosDescription("2P", "Doble Matanza (Double Play)")
                 }

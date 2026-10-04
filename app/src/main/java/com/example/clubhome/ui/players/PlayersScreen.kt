@@ -36,7 +36,9 @@ import com.example.clubhome.data.model.Player
 import com.example.clubhome.data.model.Team
 import com.example.clubhome.ui.teams.TeamsViewModel
 
-val AzulMarinoBeisbol = Color(0xFF000B3B)
+val SkyBlueBackground = Color(0xFFCBE3F7)
+val DarkNavy = Color(0xFF001254)
+val LightCardBg = Color(0xFFE8F3FC)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,40 +74,40 @@ fun PlayersScreen(
     }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = Color(0xFF64B5F6),
-        unfocusedBorderColor = Color(0xFF1A2A70),
-        focusedLabelColor = Color.White,
-        unfocusedLabelColor = Color.LightGray,
-        focusedContainerColor = Color(0xFF000833),
-        unfocusedContainerColor = Color(0xFF000833)
+        focusedTextColor = DarkNavy,
+        unfocusedTextColor = DarkNavy,
+        focusedBorderColor = DarkNavy,
+        unfocusedBorderColor = Color(0xFF90CAF9),
+        focusedLabelColor = DarkNavy,
+        unfocusedLabelColor = Color(0xFF424242),
+        focusedContainerColor = LightCardBg,
+        unfocusedContainerColor = LightCardBg
     )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Jugadores ($mode)", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text("Jugadores ($mode)", color = DarkNavy, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar", tint = DarkNavy)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SkyBlueBackground)
             )
         },
         floatingActionButton = {
             if (!isAddingPlayer && editingPlayer == null) {
                 FloatingActionButton(
                     onClick = { if (selectedTeam != null) isAddingPlayer = true },
-                    containerColor = if (selectedTeam != null) Color(0xFF1565C0) else Color.Gray,
-                    contentColor = Color.White
+                    containerColor = if (selectedTeam != null) Color(0xFFBBE2FA) else Color.Gray,
+                    contentColor = DarkNavy
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Agregar Jugador")
                 }
             }
         },
-        containerColor = AzulMarinoBeisbol
+        containerColor = SkyBlueBackground
     ) { padding ->
         Column(
             modifier = Modifier
@@ -135,17 +137,17 @@ fun PlayersScreen(
                 ExposedDropdownMenu(
                     expanded = expandedDropdown,
                     onDismissRequest = { expandedDropdown = false },
-                    modifier = Modifier.background(Color(0xFF001254))
+                    modifier = Modifier.background(LightCardBg)
                 ) {
                     if (teamsList.isEmpty()) {
                         DropdownMenuItem(
-                            text = { Text("No hay equipos en $mode", color = Color.LightGray) },
+                            text = { Text("No hay equipos en $mode", color = Color.Gray) },
                             onClick = { expandedDropdown = false }
                         )
                     } else {
                         teamsList.forEach { team ->
                             DropdownMenuItem(
-                                text = { Text(team.name, color = Color.White) },
+                                text = { Text(team.name, color = DarkNavy, fontWeight = FontWeight.SemiBold) },
                                 onClick = {
                                     selectedTeam = team
                                     expandedDropdown = false
@@ -208,7 +210,7 @@ fun PlayersScreen(
     editingPlayer?.let { player ->
         Dialog(onDismissRequest = { editingPlayer = null }) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF000E4A)),
+                colors = CardDefaults.cardColors(containerColor = LightCardBg),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.padding(16.dp)
             ) {
@@ -216,7 +218,7 @@ fun PlayersScreen(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Editar Jugador", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Editar Jugador", color = DarkNavy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
                     PlayerForm(
                         initialName = player.name,
@@ -244,11 +246,11 @@ fun PlayersScreen(
     playerToDelete?.let { player ->
         AlertDialog(
             onDismissRequest = { playerToDelete = null },
-            title = { Text("Eliminar Jugador", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Eliminar Jugador", color = DarkNavy, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     "¿Estás seguro de que deseas eliminar a \"${player.name}\"?",
-                    color = Color.LightGray
+                    color = Color(0xFF334E68)
                 )
             },
             confirmButton = {
@@ -265,10 +267,10 @@ fun PlayersScreen(
             },
             dismissButton = {
                 TextButton(onClick = { playerToDelete = null }) {
-                    Text("Cancelar", color = Color.LightGray)
+                    Text("Cancelar", color = DarkNavy)
                 }
             },
-            containerColor = Color(0xFF000E4A)
+            containerColor = LightCardBg
         )
     }
 }
@@ -281,7 +283,7 @@ fun PlayerCardItem(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF001254)),
+        colors = CardDefaults.cardColors(containerColor = LightCardBg),
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -307,10 +309,10 @@ fun PlayerCardItem(
                     modifier = Modifier
                         .size(50.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF000833)),
+                        .background(Color(0xFFBBE2FA)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.LightGray)
+                    Icon(Icons.Default.Person, contentDescription = null, tint = DarkNavy)
                 }
             }
 
@@ -318,7 +320,7 @@ fun PlayerCardItem(
 
             Text(
                 text = player.name,
-                color = Color.White,
+                color = DarkNavy,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 modifier = Modifier.weight(1f)
@@ -328,7 +330,7 @@ fun PlayerCardItem(
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = "Editar jugador",
-                    tint = Color(0xFF64B5F6),
+                    tint = DarkNavy,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -337,7 +339,7 @@ fun PlayerCardItem(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Eliminar jugador",
-                    tint = Color(0xFFEF5350),
+                    tint = Color(0xFFE53935),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -373,14 +375,14 @@ fun PlayerForm(
     }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = Color(0xFF64B5F6),
-        unfocusedBorderColor = Color(0xFF1A2A70),
-        focusedLabelColor = Color.White,
-        unfocusedLabelColor = Color.LightGray,
-        focusedContainerColor = Color(0xFF000833),
-        unfocusedContainerColor = Color(0xFF000833)
+        focusedTextColor = DarkNavy,
+        unfocusedTextColor = DarkNavy,
+        focusedBorderColor = DarkNavy,
+        unfocusedBorderColor = Color(0xFF90CAF9),
+        focusedLabelColor = DarkNavy,
+        unfocusedLabelColor = Color(0xFF424242),
+        focusedContainerColor = LightCardBg,
+        unfocusedContainerColor = LightCardBg
     )
 
     Column(

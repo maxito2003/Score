@@ -30,8 +30,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.clubhome.data.model.Team
-import com.example.clubhome.ui.auth.BaseballNavy
 import com.example.clubhome.ui.auth.BaseballRed
+
+val SkyBlueBg = Color(0xFFCBE3F7)
+val DarkNavyText = Color(0xFF0A1931)
+val LightTeamCardBg = Color(0xFFE8F3FC)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +74,7 @@ fun TeamsScreen(
                             },
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = DarkNavyText
                         )
                         Box(
                             modifier = Modifier
@@ -87,29 +90,29 @@ fun TeamsScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateMatch) { // <-- Llama a onNavigateMatch para ir al partido
+                    IconButton(onClick = onNavigateMatch) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Regresar al partido",
-                            tint = Color.White
+                            tint = DarkNavyText
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SkyBlueBg)
             )
         },
         floatingActionButton = {
             if (!isAddingNewTeam && teamToEdit == null) {
                 FloatingActionButton(
                     onClick = { isAddingNewTeam = true },
-                    containerColor = Color(0xFF1565C0),
-                    contentColor = Color.White
+                    containerColor = Color(0xFFBBE2FA),
+                    contentColor = DarkNavyText
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Agregar Equipo")
                 }
             }
         },
-        containerColor = BaseballNavy
+        containerColor = SkyBlueBg
     ) { padding ->
         Box(
             modifier = Modifier
@@ -196,11 +199,11 @@ fun TeamsScreen(
     if (teamToDelete != null) {
         AlertDialog(
             onDismissRequest = { teamToDelete = null },
-            title = { Text("Eliminar Equipo", color = Color.White) },
+            title = { Text("Eliminar Equipo", color = DarkNavyText) },
             text = {
                 Text(
                     "¿Estás seguro de que deseas eliminar el equipo \"${teamToDelete?.name}\"?",
-                    color = Color.LightGray
+                    color = Color(0xFF334E68)
                 )
             },
             confirmButton = {
@@ -214,10 +217,10 @@ fun TeamsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { teamToDelete = null }) {
-                    Text("Cancelar", color = Color.White)
+                    Text("Cancelar", color = DarkNavyText)
                 }
             },
-            containerColor = Color(0xFF000E4A)
+            containerColor = LightTeamCardBg
         )
     }
 }
@@ -231,8 +234,8 @@ fun TeamCardItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFF1A2A70), RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF001254))
+            .border(1.dp, Color(0xFFBBE0FC), RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = LightTeamCardBg)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -252,13 +255,13 @@ fun TeamCardItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp)
-                        .background(Color(0xFF00051C)),
+                        .background(Color(0xFFBBE2FA)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = null,
-                        tint = Color.Gray,
+                        tint = DarkNavyText,
                         modifier = Modifier.size(48.dp)
                     )
                 }
@@ -276,7 +279,7 @@ fun TeamCardItem(
                 ) {
                     Text(
                         text = "Nombre: ${team.name ?: ""}",
-                        color = Color.White,
+                        color = DarkNavyText,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
@@ -284,7 +287,7 @@ fun TeamCardItem(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Coach: ${team.coach}",
-                            color = Color.LightGray,
+                            color = Color(0xFF334E68),
                             fontSize = 15.sp
                         )
                     }
@@ -295,7 +298,7 @@ fun TeamCardItem(
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Editar",
-                            tint = Color.White
+                            tint = DarkNavyText
                         )
                     }
                     IconButton(onClick = onDelete) {
@@ -367,12 +370,14 @@ fun TeamForm(
         OutlinedTextField(
             value = teamName,
             onValueChange = { teamName = it },
-            label = { Text("Nombre del Equipo", color = Color.Gray) },
+            label = { Text("Nombre del Equipo", color = Color(0xFF334E68)) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF1565C0),
-                unfocusedBorderColor = Color.Gray,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
+                focusedBorderColor = DarkNavyText,
+                unfocusedBorderColor = Color(0xFF90CAF9),
+                focusedTextColor = DarkNavyText,
+                unfocusedTextColor = DarkNavyText,
+                focusedContainerColor = LightTeamCardBg,
+                unfocusedContainerColor = LightTeamCardBg
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -380,12 +385,14 @@ fun TeamForm(
         OutlinedTextField(
             value = coachName,
             onValueChange = { coachName = it },
-            label = { Text("Coach", color = Color.Gray) },
+            label = { Text("Coach", color = Color(0xFF334E68)) },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF1565C0),
-                unfocusedBorderColor = Color.Gray,
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
+                focusedBorderColor = DarkNavyText,
+                unfocusedBorderColor = Color(0xFF90CAF9),
+                focusedTextColor = DarkNavyText,
+                unfocusedTextColor = DarkNavyText,
+                focusedContainerColor = LightTeamCardBg,
+                unfocusedContainerColor = LightTeamCardBg
             ),
             modifier = Modifier.fillMaxWidth()
         )

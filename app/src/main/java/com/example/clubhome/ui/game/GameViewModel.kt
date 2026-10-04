@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 class GameViewModel : ViewModel() {
     var currentMatchId by mutableStateOf<String?>(null)
     var matchCode by mutableStateOf<String?>(null)
+    var currentMode by mutableStateOf<String?>(null)
 
     // Conservar los nombres de los equipos
     var team1Name by mutableStateOf("Equipo 1")
@@ -273,6 +274,7 @@ class GameViewModel : ViewModel() {
     fun resetGameSession() {
         currentMatchId = null
         matchCode = null
+        currentMode = null
         activeChannelCode = null
 
         // Resetear nombres por defecto

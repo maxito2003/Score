@@ -27,6 +27,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.clubhome.data.remote.SupabaseClientManager
 import com.example.clubhome.ui.components.BaseballDiamond
 import com.example.clubhome.ui.game.*
+import com.example.clubhome.ui.theme.AzulMarinoBeisbol
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
