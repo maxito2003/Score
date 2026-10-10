@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.clubhome.data.model.Match
 import com.example.clubhome.data.model.Team
 import com.example.clubhome.data.remote.SupabaseClientManager
+import io.github.jan.supabase.auth.auth
 import com.example.clubhome.ui.auth.BaseballRed
 import com.example.clubhome.ui.components.BaseAnnotationDialog
 import com.example.clubhome.ui.components.BaseballDiamond
@@ -159,19 +160,21 @@ fun GameScreen(
 
             scope.launch(Dispatchers.IO) {
                 try {
+                    val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
                     val initialPayload = LineupDataPayload(
                         team1Lineup = gameViewModel.team1Lineup.toList(),
                         team2Lineup = gameViewModel.team2Lineup.toList(),
                         durationSeconds = 0L
                     )
-                    val initialJson = Json.encodeToString(initialPayload)
+                    val initialJsonElement = Json.parseToJsonElement(Json.encodeToString(initialPayload))
                     val newMatch = Match(
                         code = matchCode,
+                        userId = currentUserId,
                         mode = modeTitle,
                         homeTeam = gameViewModel.team1Name,
                         awayTeam = gameViewModel.team2Name,
                         status = "LIVE",
-                        lineupData = initialJson,
+                        lineupData = initialJsonElement,
                         runs = 0,
                         hits = 0,
                         errors = 0,
@@ -229,17 +232,18 @@ fun GameScreen(
 
     fun syncToSupabase(status: String = "LIVE") {
         val matchId = gameViewModel.currentMatchId ?: return
+        val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
         val payload = LineupDataPayload(
             team1Lineup = gameViewModel.team1Lineup.toList(),
             team2Lineup = gameViewModel.team2Lineup.toList(),
             durationSeconds = gameViewModel.elapsedSeconds
         )
-        val jsonLineup = Json.encodeToString(payload)
+        val jsonElement = Json.parseToJsonElement(Json.encodeToString(payload))
         scope.launch(Dispatchers.IO) {
             try {
                 SupabaseClientManager.client.postgrest["matches"]
                     .update({
-                        set("lineup_data", jsonLineup)
+                        set("lineup_data", jsonElement)
                         set("home_team", gameViewModel.team1Name)
                         set("away_team", gameViewModel.team2Name)
                         set("hits", currentHits)
@@ -249,6 +253,9 @@ fun GameScreen(
                         set("runs", currentCalculatedRuns)
                         set("status", status)
                         set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
+                        if (currentUserId != null) {
+                            set("user_id", currentUserId)
+                        }
                     }) {
                         filter { eq("id", matchId) }
                     }
@@ -271,8 +278,81 @@ fun GameScreen(
         if (gameViewModel.isTimerRunning) {
             gameViewModel.toggleTimer()
         }
-        syncToSupabase(status = "FINISHED")
-        onNavigateFinishedGames()
+        val matchId = gameViewModel.currentMatchId
+        val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
+        val payload = LineupDataPayload(
+            team1Lineup = gameViewModel.team1Lineup.toList(),
+            team2Lineup = gameViewModel.team2Lineup.toList(),
+            durationSeconds = gameViewModel.elapsedSeconds
+        )
+        val jsonLineupElement = Json.parseToJsonElement(Json.encodeToString(payload))
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val matchCodeToUse = gameViewModel.matchCode ?: gameViewModel.generateMatchCode()
+                val totalRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isRun } }) +
+                                (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isRun } })
+
+                val finishedMatchData = Match(
+                    id = matchId,
+                    code = matchCodeToUse,
+                    userId = currentUserId,
+                    mode = modeTitle,
+                    homeTeam = gameViewModel.team1Name,
+                    awayTeam = gameViewModel.team2Name,
+                    status = "FINISHED",
+                    lineupData = jsonLineupElement,
+                    runs = totalRuns,
+                    hits = gameViewModel.team1Hits + gameViewModel.team2Hits,
+                    errors = gameViewModel.team1Errors + gameViewModel.team2Errors,
+                    outs = gameViewModel.team1Outs + gameViewModel.team2Outs,
+                    homeRuns = gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns,
+                    durationSeconds = gameViewModel.elapsedSeconds.toInt()
+                )
+
+                Log.d("GameScreen", "Guardando partido terminado con ID: $matchId, Code: $matchCodeToUse, userId: $currentUserId")
+
+                SupabaseClientManager.client.postgrest["matches"]
+                    .upsert(finishedMatchData)
+
+                Log.d("GameScreen", "Partido guardado exitosamente como FINISHED en Supabase")
+            } catch (e: Exception) {
+                Log.e("GameScreen", "Error al guardar partido con upsert, usando insert de reserva", e)
+                try {
+                    val fallbackCode = gameViewModel.generateMatchCode()
+                    val totalRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isRun } }) +
+                                    (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isRun } })
+
+                    val fallbackMatch = Match(
+                        code = fallbackCode,
+                        userId = currentUserId,
+                        mode = modeTitle,
+                        homeTeam = gameViewModel.team1Name,
+                        awayTeam = gameViewModel.team2Name,
+                        status = "FINISHED",
+                        lineupData = jsonLineupElement,
+                        runs = totalRuns,
+                        hits = gameViewModel.team1Hits + gameViewModel.team2Hits,
+                        errors = gameViewModel.team1Errors + gameViewModel.team2Errors,
+                        outs = gameViewModel.team1Outs + gameViewModel.team2Outs,
+                        homeRuns = gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns,
+                        durationSeconds = gameViewModel.elapsedSeconds.toInt()
+                    )
+
+                    SupabaseClientManager.client.postgrest["matches"]
+                        .insert(fallbackMatch)
+
+                    Log.d("GameScreen", "Partido guardado exitosamente con insert de reserva")
+                } catch (e2: Exception) {
+                    Log.e("GameScreen", "Error crítico al intentar guardar el partido en Supabase", e2)
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    gameViewModel.resetGameSession()
+                    onNavigateFinishedGames()
+                }
+            }
+        }
     }
 
     ModalNavigationDrawer(
@@ -690,7 +770,7 @@ fun GameScreen(
                                                     .heightIn(max = 250.dp)
                                                     .background(LightCardBg)
                                             ) {
-                                                val posOptions = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "EH")
+                                                val posOptions = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
                                                 posOptions.forEach { option ->
                                                     DropdownMenuItem(
                                                         text = {

@@ -1,5 +1,6 @@
 package com.example.clubhome.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.clubhome.ui.game.BaseState
+
+val DarkNavy = Color(0xFF001254)
+val LightCardBg = Color(0xFFE8F3FC)
+val CardBorderColor = Color(0xFFBBE0FC)
 
 @Composable
 fun BaseAnnotationDialog(
@@ -43,8 +48,9 @@ fun BaseAnnotationDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF000E4A)),
+            colors = CardDefaults.cardColors(containerColor = LightCardBg),
             shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, CardBorderColor),
             modifier = Modifier.padding(16.dp)
         ) {
             Column(
@@ -59,7 +65,7 @@ fun BaseAnnotationDialog(
                 ) {
                     Text(
                         text = "Anotación de Bases",
-                        color = Color.White,
+                        color = DarkNavy,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -70,7 +76,7 @@ fun BaseAnnotationDialog(
                         Icon(
                             imageVector = Icons.Default.HelpOutline,
                             contentDescription = "Glosario de Siglas",
-                            tint = Color(0xFF64B5F6)
+                            tint = Color(0xFF1565C0)
                         )
                     }
                 }
@@ -180,10 +186,10 @@ fun BaseAnnotationDialog(
             onDismissRequest = { showDiamondHelpDialog = false },
             confirmButton = {
                 TextButton(onClick = { showDiamondHelpDialog = false }) {
-                    Text("Entendido", color = Color(0xFF64B5F6))
+                    Text("Entendido", color = Color(0xFF1565C0))
                 }
             },
-            title = { Text("Glosario de Siglas", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Glosario de Siglas", color = DarkNavy, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     PosDescription("H1", "Sencillo (Hit de 1 Base)")
@@ -196,7 +202,7 @@ fun BaseAnnotationDialog(
                     PosDescription("2P", "Doble Matanza (Double Play)")
                 }
             },
-            containerColor = Color(0xFF000B3B)
+            containerColor = LightCardBg
         )
     }
 }
@@ -212,15 +218,15 @@ fun QuickActionButton(
         onClick = onClick,
         modifier = modifier,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) Color(0xFF1976D2) else Color(0xFF001666)
+            containerColor = if (isSelected) Color(0xFF1565C0) else Color(0xFFBBE2FA)
         ),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF64B5F6)) else null,
+        border = BorderStroke(1.dp, if (isSelected) DarkNavy else Color(0xFF90CAF9)),
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
         shape = RoundedCornerShape(6.dp)
     ) {
         Text(
             text = text,
-            color = if (isSelected) Color.White else Color.LightGray,
+            color = if (isSelected) Color.White else Color.Black,
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold
         )
@@ -233,12 +239,12 @@ fun BaseButton(text: String, isActive: Boolean, modifier: Modifier, onClick: () 
         onClick = onClick,
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
-        color = if (isActive) Color(0xFF4CAF50) else Color(0xFF001A7A),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) Color.White else Color.Gray)
+        color = if (isActive) Color(0xFF2E7D32) else Color(0xFFBBE2FA),
+        border = BorderStroke(1.dp, if (isActive) Color.White else Color(0xFF90CAF9))
     ) {
         Text(
             text = text,
-            color = Color.White,
+            color = if (isActive) Color.White else Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
@@ -249,7 +255,7 @@ fun BaseButton(text: String, isActive: Boolean, modifier: Modifier, onClick: () 
 @Composable
 fun PosDescription(sigla: String, nombre: String) {
     Row {
-        Text("$sigla: ", color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        Text(nombre, color = Color.LightGray, fontSize = 13.sp)
+        Text("$sigla: ", color = Color(0xFF1565C0), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text(nombre, color = Color.Black, fontSize = 13.sp)
     }
 }

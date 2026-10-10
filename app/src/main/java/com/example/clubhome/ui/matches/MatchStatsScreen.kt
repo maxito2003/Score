@@ -31,6 +31,7 @@ import com.example.clubhome.ui.theme.AzulMarinoBeisbol
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import com.example.clubhome.data.model.Match
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,14 +75,20 @@ fun MatchStatsScreen(
 
     // Decodificar lineupData cuando se reciba actualización de Supabase
     LaunchedEffect(matchInfo) {
-        val rawJson = matchInfo?.lineupData
-        if (!rawJson.isNullOrBlank()) {
+        val jsonElement = matchInfo?.lineupData
+        if (jsonElement != null) {
             try {
-                val parsedLineup = Json.decodeFromString<List<PlayerLineup>>(rawJson)
+                val parsedPayload = Json.decodeFromJsonElement<LineupDataPayload>(jsonElement)
                 lineup.clear()
-                lineup.addAll(parsedLineup)
+                lineup.addAll(parsedPayload.team1Lineup)
             } catch (e: Exception) {
-                Log.e("MatchStatsScreen", "Error al parsear el JSON de lineupData", e)
+                try {
+                    val parsedList = Json.decodeFromString<List<PlayerLineup>>(jsonElement.toString())
+                    lineup.clear()
+                    lineup.addAll(parsedList)
+                } catch (e2: Exception) {
+                    Log.e("MatchStatsScreen", "Error al parsear el JSON de lineupData", e2)
+                }
             }
         } else if (lineup.isEmpty()) {
             // Cargar estado inicial por defecto si la base de datos está vacía

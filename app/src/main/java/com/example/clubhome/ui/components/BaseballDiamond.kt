@@ -48,14 +48,14 @@ fun BaseballDiamond(
 
             drawPath(
                 path = outlinePath,
-                color = Color(0xFF757575),
-                style = Stroke(width = 3f)
+                color = Color(0xFF1565C0),
+                style = Stroke(width = 3.5f)
             )
 
             // Colores para encendido / apagado
-            val inactiveColor = Color(0xFF424242)
-            val yellowActive = Color(0xFFFFEB3B) // Amarillo brillante
-            val greenActive = Color(0xFF00E676)  // Verde brillante
+            val inactiveColor = Color(0xFF757575)
+            val yellowActive = Color(0xFFFFB300) // Amarillo dorado brillante
+            val greenActive = Color(0xFF2E7D32)  // Verde brillante
 
             val dotRadius = 9f
 
@@ -87,11 +87,11 @@ fun BaseballDiamond(
                 center = bottom
             )
 
-            // Dibujar el texto de la jugada (H1, H2, HR, K, etc.) en el centro del rombo
+            // Dibujar el texto de la jugada (H1, H2, HR, K, BG, etc.) en el centro del rombo en COLOR NEGRO
             state.playType?.let { text ->
                 if (text.isNotEmpty()) {
                     val paint = Paint().apply {
-                        color = android.graphics.Color.WHITE
+                        color = android.graphics.Color.BLACK
                         textSize = w * 0.35f
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.DEFAULT_BOLD

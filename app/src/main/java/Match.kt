@@ -2,6 +2,7 @@ package com.example.clubhome.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class Match(
@@ -13,7 +14,7 @@ data class Match(
     @SerialName("away_team") val awayTeam: String? = "Equipo Visitante",
     val status: String? = "LIVE",
     @SerialName("created_at") val createdAt: String? = null,
-    @SerialName("lineup_data") val lineupData: String? = null,
+    @SerialName("lineup_data") val lineupData: JsonElement? = null,
     val runs: Int = 0,
     val hits: Int = 0,
     val errors: Int = 0,

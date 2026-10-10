@@ -122,8 +122,28 @@ class AuthViewModel(
             return
         }
 
-        if (password.length < 6) {
-            _uiState.update { it.copy(errorMessage = "La contraseña debe tener al menos 6 caracteres.") }
+        val isLengthValid = password.length in 8..15
+        val hasUppercase = password.any { it.isUpperCase() }
+        val hasNumber = password.any { it.isDigit() }
+        val hasSpecialChar = password.any { !it.isLetterOrDigit() && !it.isWhitespace() }
+
+        if (!isLengthValid) {
+            _uiState.update { it.copy(errorMessage = "La contraseña debe tener entre 8 y 15 caracteres.") }
+            return
+        }
+
+        if (!hasUppercase) {
+            _uiState.update { it.copy(errorMessage = "La contraseña debe contener al menos una letra mayúscula.") }
+            return
+        }
+
+        if (!hasNumber) {
+            _uiState.update { it.copy(errorMessage = "La contraseña debe contener al menos un número.") }
+            return
+        }
+
+        if (!hasSpecialChar) {
+            _uiState.update { it.copy(errorMessage = "La contraseña debe contener al menos un carácter especial.") }
             return
         }
 

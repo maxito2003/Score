@@ -14,7 +14,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -213,7 +218,32 @@ fun RegisterScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    val password = uiState.password
+                    val isLengthValid = password.length in 8..15
+                    val hasUppercase = password.any { it.isUpperCase() }
+                    val hasNumber = password.any { it.isDigit() }
+                    val hasSpecialChar = password.any { !it.isLetterOrDigit() && !it.isWhitespace() }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Requisitos de la contraseña:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF333333),
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        PasswordRequirementRow(label = "Entre 8 y 15 caracteres", isMet = isLengthValid)
+                        PasswordRequirementRow(label = "Al menos una letra mayúscula (A-Z)", isMet = hasUppercase)
+                        PasswordRequirementRow(label = "Al menos un número (0-9)", isMet = hasNumber)
+                        PasswordRequirementRow(label = "Al menos un carácter especial (!, @, #, $, %, etc.)", isMet = hasSpecialChar)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Campo Confirmar Contraseña
                     OutlinedTextField(
@@ -322,5 +352,27 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+fun PasswordRequirementRow(label: String, isMet: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 2.dp)
+    ) {
+        Icon(
+            imageVector = if (isMet) Icons.Default.CheckCircle else Icons.Default.Cancel,
+            contentDescription = null,
+            tint = if (isMet) Color(0xFF2E7D32) else Color(0xFF888888),
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = if (isMet) Color(0xFF2E7D32) else Color(0xFF666666),
+            fontWeight = if (isMet) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }

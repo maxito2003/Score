@@ -1,11 +1,14 @@
 package com.example.clubhome.ui.matches
 
+import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,13 +17,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.clubhome.data.model.Match
 import com.example.clubhome.data.remote.SupabaseClientManager
-import com.example.clubhome.ui.auth.BaseballNavy
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.example.clubhome.data.model.Match
-import androidx.compose.foundation.lazy.items
+
+val SkyBlueBackground = Color(0xFFCBE3F7)
+val DarkNavy = Color(0xFF001254)
+val LightCardBg = Color(0xFFE8F3FC)
+val CardBorderColor = Color(0xFFBBE0FC)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,14 +41,27 @@ fun FinishedGamesListScreen(
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             try {
-                val result = SupabaseClientManager.client.postgrest["matches"]
+                val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
+                Log.d("FinishedGamesListScreen", "Obteniendo partidos terminados. UserId: $currentUserId")
+
+                val allFinished = SupabaseClientManager.client.postgrest["matches"]
                     .select {
-                        filter { eq("status", "FINISHED") }
+                        filter {
+                            eq("status", "FINISHED")
+                        }
                     }
                     .decodeList<Match>()
-                finishedMatches = result
+
+                Log.d("FinishedGamesListScreen", "Partidos totales con status FINISHED: ${allFinished.size}")
+
+                finishedMatches = if (currentUserId != null) {
+                    val filtered = allFinished.filter { it.userId == currentUserId }
+                    if (filtered.isNotEmpty()) filtered else allFinished
+                } else {
+                    allFinished
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("FinishedGamesListScreen", "Error al consultar partidos terminados", e)
             } finally {
                 isLoading = false
             }
@@ -51,16 +71,16 @@ fun FinishedGamesListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Partidos Terminados", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text("Partidos Terminados", color = DarkNavy, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = DarkNavy)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BaseballNavy)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SkyBlueBackground)
             )
         },
-        containerColor = Color(0xFF000E4A)
+        containerColor = SkyBlueBackground
     ) { padding ->
         if (isLoading) {
             Box(
@@ -69,7 +89,7 @@ fun FinishedGamesListScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color.White)
+                CircularProgressIndicator(color = DarkNavy)
             }
         } else if (finishedMatches.isEmpty()) {
             Box(
@@ -79,9 +99,10 @@ fun FinishedGamesListScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No hay partidos terminados aún.",
-                    color = Color.LightGray,
-                    fontSize = 16.sp
+                    text = "No tienes partidos terminados aún.",
+                    color = Color(0xFF334E68),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
         } else {
@@ -96,8 +117,9 @@ fun FinishedGamesListScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onMatchClick(match.id.orEmpty()) }, // <-- AQUÍ SE CORRIGE CON .orEmpty()
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF001254)),
+                            .clickable { onMatchClick(match.id.orEmpty()) },
+                        colors = CardDefaults.cardColors(containerColor = LightCardBg),
+                        border = BorderStroke(1.dp, CardBorderColor),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
@@ -107,30 +129,31 @@ fun FinishedGamesListScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "${match.homeTeam} vs ${match.awayTeam}",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
+                                    color = DarkNavy,
+                                    fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Modo: ${match.mode}",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp
+                                    text = "Modo: ${match.mode}${if (!match.code.isNullOrBlank()) " | Código: ${match.code}" else ""}",
+                                    color = Color(0xFF334E68),
+                                    fontSize = 13.sp
                                 )
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     text = "${match.runs} Carreras",
-                                    color = Color(0xFF4CAF50),
-                                    fontSize = 15.sp,
+                                    color = Color(0xFF2E7D32),
+                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "${match.hits} H / ${match.errors} E",
-                                    color = Color.LightGray,
+                                    text = "${match.hits} H / ${match.errors} E / ${match.outs} Out",
+                                    color = Color(0xFF334E68),
                                     fontSize = 12.sp
                                 )
                             }

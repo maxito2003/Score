@@ -1,26 +1,40 @@
 package com.example.clubhome.ui.matches
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.clubhome.data.model.Match
 import com.example.clubhome.data.remote.SupabaseClientManager
-import com.example.clubhome.ui.auth.BaseballNavy
+import com.example.clubhome.ui.components.BaseballDiamond
+import com.example.clubhome.ui.game.BaseState
+import com.example.clubhome.ui.game.CELL_SIZE
 import com.example.clubhome.ui.game.LineupDataPayload
+import com.example.clubhome.ui.game.ReadOnlyCounter
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import com.example.clubhome.data.model.Match
+import kotlinx.serialization.json.decodeFromJsonElement
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +46,8 @@ fun FinishedGameDetailScreen(
     var payload by remember { mutableStateOf<LineupDataPayload?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
+    var selectedTeam by remember { mutableStateOf(1) } // 1 for Home/Team1, 2 for Away/Team2
+
     LaunchedEffect(matchId) {
         withContext(Dispatchers.IO) {
             try {
@@ -40,8 +56,12 @@ fun FinishedGameDetailScreen(
                     .decodeSingleOrNull<Match>()
 
                 match = result
-                result?.lineupData?.let { jsonStr ->
-                    payload = Json.decodeFromString<LineupDataPayload>(jsonStr)
+                result?.lineupData?.let { jsonElement ->
+                    try {
+                        payload = Json.decodeFromJsonElement<LineupDataPayload>(jsonElement)
+                    } catch (e: Exception) {
+                        payload = Json.decodeFromString<LineupDataPayload>(jsonElement.toString())
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -54,15 +74,45 @@ fun FinishedGameDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Resumen del Partido", color = Color.White) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Resumen del Partido",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkNavy
+                        )
+
+                        match?.mode?.let { mode ->
+                            Box(
+                                modifier = Modifier
+                                    .background(Color.White, shape = RoundedCornerShape(12.dp))
+                                    .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = mode.uppercase(),
+                                    color = DarkNavy,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BaseballNavy)
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = DarkNavy)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SkyBlueBackground)
             )
-        }
+        },
+        containerColor = SkyBlueBackground
     ) { padding ->
         if (isLoading) {
             Box(
@@ -71,7 +121,7 @@ fun FinishedGameDetailScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = BaseballNavy)
+                CircularProgressIndicator(color = DarkNavy)
             }
         } else if (match == null) {
             Box(
@@ -80,69 +130,293 @@ fun FinishedGameDetailScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No se encontró la información del partido.")
+                Text(
+                    text = "No se encontró la información del partido.",
+                    color = Color(0xFF334E68),
+                    fontSize = 16.sp
+                )
             }
         } else {
-            LazyColumn(
+            val currentMatch = match!!
+            val team1Lineup = payload?.team1Lineup ?: emptyList()
+            val team2Lineup = payload?.team2Lineup ?: emptyList()
+            val activeLineup = if (selectedTeam == 1) team1Lineup else team2Lineup
+
+            val totalInnings = remember(activeLineup) {
+                activeLineup.maxOfOrNull { it.innings.size }?.coerceAtLeast(10) ?: 10
+            }
+
+            val durationSeconds = payload?.durationSeconds ?: currentMatch.durationSeconds.toLong()
+            val minutes = durationSeconds / 60
+            val seconds = durationSeconds % 60
+            val timeFormatted = String.format("%02d:%02d", minutes, seconds)
+
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Tarjeta de Marcador
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                // Fila con Código y Tiempo Total
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!currentMatch.code.isNullOrBlank()) {
+                        Surface(
+                            color = LightCardBg,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, CardBorderColor)
                         ) {
-                            Text(
-                                text = "ESTADO: FINALIZADO",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(match?.homeTeam ?: "Local", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                    Text("${match?.runs ?: 0}", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                                }
-                                Text("VS", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.Gray)
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(match?.awayTeam ?: "Visitante", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                    Text("${match?.runs ?: 0}", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                                }
+                                Text("CÓDIGO: ", color = DarkNavy, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = currentMatch.code ?: "",
+                                    color = DarkNavy,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Black
+                                )
                             }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, CardBorderColor)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Tiempo Total: ", color = Color(0xFF334E68), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                text = timeFormatted,
+                                color = DarkNavy,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
 
-                // Estadísticas Generales (Hits, Errores, Outs, Home Runs)
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                // Tarjeta de Contadores Generales
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = LightCardBg),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, CardBorderColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
                     ) {
+                        ReadOnlyCounter("Carreras", currentMatch.runs, DarkNavy)
+                        ReadOnlyCounter("Hits", currentMatch.hits, DarkNavy)
+                        ReadOnlyCounter("Errores", currentMatch.errors, DarkNavy)
+                        ReadOnlyCounter("Outs", currentMatch.outs, DarkNavy)
+                        ReadOnlyCounter("HR", currentMatch.homeRuns, DarkNavy)
+                    }
+                }
+
+                // Botones para alternar entre Equipos
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { selectedTeam = 1 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedTeam == 1) Color(0xFFBBE2FA) else LightCardBg
+                        ),
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = currentMatch.homeTeam ?: "Equipo 1",
+                            color = DarkNavy,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Button(
+                        onClick = { selectedTeam = 2 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedTeam == 2) Color(0xFFBBE2FA) else LightCardBg
+                        ),
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = currentMatch.awayTeam ?: "Equipo 2",
+                            color = DarkNavy,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Tabla de Alineación y Entradas (Modo Lectura)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.White,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, CardBorderColor)
+                ) {
+                    val tableHorizontalScrollState = rememberScrollState()
+
+                    Column {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .background(Color(0xFFDCEEFB))
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Hits: ${match?.hits ?: 0}")
-                            Text("Errores: ${match?.errors ?: 0}")
-                            Text("Outs: ${match?.outs ?: 0}")
-                            Text("HR: ${match?.homeRuns ?: 0}")
+                            Text("#", color = DarkNavy, modifier = Modifier.width(28.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            Text("LINE UP", color = DarkNavy, modifier = Modifier.width(130.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("POS", color = DarkNavy, modifier = Modifier.width(60.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+
+                            Row(
+                                modifier = Modifier.horizontalScroll(tableHorizontalScrollState),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                for (i in 1..totalInnings) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(CELL_SIZE)
+                                            .height(28.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$i",
+                                            color = DarkNavy,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = CardBorderColor)
+
+                        if (activeLineup.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No hay datos de alineación guardados para este equipo.", color = Color.Gray, fontSize = 14.sp)
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.weight(1f)) {
+                                itemsIndexed(activeLineup) { playerIdx, player ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("${player.number}", color = DarkNavy, modifier = Modifier.width(28.dp), fontSize = 12.sp, textAlign = TextAlign.Center)
+
+                                        Text(
+                                            text = player.name,
+                                            color = if (player.name == "Seleccionar") Color.Gray else DarkNavy,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.width(130.dp),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Text(
+                                            text = player.position.ifBlank { "${playerIdx + 1}" },
+                                            color = Color(0xFF1565C0),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.width(60.dp),
+                                            textAlign = TextAlign.Center
+                                        )
+
+                                        Row(modifier = Modifier.horizontalScroll(tableHorizontalScrollState)) {
+                                            for (inningIdx in 0 until totalInnings) {
+                                                val baseState = player.innings.getOrElse(inningIdx) { BaseState() }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(CELL_SIZE)
+                                                        .padding(2.dp)
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(Color(0xFFF0F7FF))
+                                                        .border(1.dp, CardBorderColor, RoundedCornerShape(4.dp)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    BaseballDiamond(state = baseState)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    HorizontalDivider(color = Color(0xFFE8F3FC))
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = CardBorderColor, thickness = 2.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFDCEEFB))
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "TOTALES",
+                                color = DarkNavy,
+                                modifier = Modifier.width(218.dp),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                            Row(modifier = Modifier.horizontalScroll(tableHorizontalScrollState)) {
+                                for (inningIdx in 0 until totalInnings) {
+                                    val totalRunsInInning = activeLineup.sumOf { player ->
+                                        val inningState = player.innings.getOrNull(inningIdx)
+                                        if (inningState != null && inningState.isRun) 1 else 0
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .width(CELL_SIZE)
+                                            .height(24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$totalRunsInInning",
+                                            color = if (totalRunsInInning > 0) Color(0xFF2E7D32) else Color.Gray,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

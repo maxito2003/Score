@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CLUBHOMETheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFCBE3F7)) {
                     ClubHomeApp()
                 }
             }

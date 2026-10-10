@@ -102,7 +102,7 @@ fun HomeScreen(
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
-                    color = Color.White
+                    color = Color.Black
                 )
             )
 
@@ -120,7 +120,7 @@ fun HomeScreen(
                     text = "¡Hola, $userName!",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = Color.Black,
                     modifier = Modifier.padding(top = 20.dp)
                 )
             }
@@ -134,7 +134,7 @@ fun HomeScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     fontStyle = FontStyle.Italic,
-                    color = Color.White
+                    color = Color.Black
                 )
             )
 
@@ -189,7 +189,7 @@ fun HomeScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     fontStyle = FontStyle.Italic,
-                    color = Color.White
+                    color = Color.Black
                 )
             )
 
