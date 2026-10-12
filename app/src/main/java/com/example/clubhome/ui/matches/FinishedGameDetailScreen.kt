@@ -3,7 +3,6 @@ package com.example.clubhome.ui.matches
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -81,9 +80,9 @@ fun FinishedGameDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Resumen del Partido",
+                            text = "Estadísticas del Partido",
                             fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
                             color = DarkNavy
                         )
 
@@ -147,9 +146,18 @@ fun FinishedGameDetailScreen(
             }
 
             val durationSeconds = payload?.durationSeconds ?: currentMatch.durationSeconds.toLong()
-            val minutes = durationSeconds / 60
+            val hours = durationSeconds / 3600
+            val minutes = (durationSeconds % 3600) / 60
             val seconds = durationSeconds % 60
-            val timeFormatted = String.format("%02d:%02d", minutes, seconds)
+            val timeFormatted = String.format("%02d:%02d:%02d", hours, minutes, seconds)
+
+            val openRunsTeam1 = team1Lineup.sumOf { p -> p.innings.count { it.isOpenRun } }
+            val openRunsTeam2 = team2Lineup.sumOf { p -> p.innings.count { it.isOpenRun } }
+            val closedRunsTeam1 = team1Lineup.sumOf { p -> p.innings.count { it.isClosedRun } }
+            val closedRunsTeam2 = team2Lineup.sumOf { p -> p.innings.count { it.isClosedRun } }
+
+            val currentOpenRuns = if (selectedTeam == 1) openRunsTeam1 else openRunsTeam2
+            val currentClosedRuns = if (selectedTeam == 1) closedRunsTeam1 else closedRunsTeam2
 
             Column(
                 modifier = Modifier
@@ -158,57 +166,48 @@ fun FinishedGameDetailScreen(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Fila con Código y Tiempo Total
+                // Fila con Código, Fecha y Tiempo Total
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (!currentMatch.code.isNullOrBlank()) {
-                        Surface(
-                            color = LightCardBg,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, CardBorderColor)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text("CÓDIGO: ", color = DarkNavy, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    text = currentMatch.code ?: "",
-                                    color = DarkNavy,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.width(1.dp))
+                    Column {
+                        Text(
+                            text = "${currentMatch.homeTeam} vs ${currentMatch.awayTeam}",
+                            color = DarkNavy,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "📅 ${formatMatchDateTime(currentMatch.createdAt)}",
+                            color = Color(0xFF334E68),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
 
                     Surface(
                         color = Color.White,
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, CardBorderColor)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text("Tiempo Total: ", color = Color(0xFF334E68), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text("⏱️ ", fontSize = 12.sp)
                             Text(
                                 text = timeFormatted,
                                 color = DarkNavy,
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
 
-                // Tarjeta de Contadores Generales
+                // Tarjeta de Contadores (C. Abiertas, C. Cerradas, Hits, Errores, Outs, HR)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = LightCardBg),
                     shape = RoundedCornerShape(16.dp),
@@ -221,7 +220,8 @@ fun FinishedGameDetailScreen(
                             .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        ReadOnlyCounter("Carreras", currentMatch.runs, DarkNavy)
+                        ReadOnlyCounter("C. Abiertas", currentOpenRuns, DarkNavy)
+                        ReadOnlyCounter("C. Cerradas", currentClosedRuns, DarkNavy)
                         ReadOnlyCounter("Hits", currentMatch.hits, DarkNavy)
                         ReadOnlyCounter("Errores", currentMatch.errors, DarkNavy)
                         ReadOnlyCounter("Outs", currentMatch.outs, DarkNavy)
@@ -273,7 +273,7 @@ fun FinishedGameDetailScreen(
                     }
                 }
 
-                // Tabla de Alineación y Entradas (Modo Lectura)
+                // Tabla de Alineación y Entradas (Modo Lectura Completo)
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color.White,

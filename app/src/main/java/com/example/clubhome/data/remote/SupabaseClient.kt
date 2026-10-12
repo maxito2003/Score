@@ -5,10 +5,12 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.serializer.KotlinXSerializer
 import io.github.jan.supabase.storage.Storage
+import kotlinx.serialization.json.Json
+
 object SupabaseClientManager {
 
-    // Reemplazar con la URL y la ANON KEY de tu proyecto en Supabase
     private const val SUPABASE_URL = "https://ksrqhboslyakdyribqzr.supabase.co"
     private const val SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzcnFoYm9zbHlha2R5cmlicXpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyMTM0MDQsImV4cCI6MjEwNTc4OTQwNH0.H0UG--nHAXeEsKynh6jrbpzkGteIWYNl-GceKluVTwk"
 
@@ -17,6 +19,13 @@ object SupabaseClientManager {
             supabaseUrl = SUPABASE_URL,
             supabaseKey = SUPABASE_KEY
         ) {
+            defaultSerializer = KotlinXSerializer(
+                Json {
+                    ignoreUnknownKeys = true
+                    explicitNulls = false
+                    encodeDefaults = true
+                }
+            )
             install(Postgrest)
             install(Storage)
             install(Auth)

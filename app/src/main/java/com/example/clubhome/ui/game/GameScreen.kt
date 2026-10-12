@@ -66,7 +66,9 @@ data class BaseState(
     val playType: String? = null,
     val outNumber: Int = 0
 ) {
-    val isRun: Boolean get() = homeBase || (firstBase && secondBase && thirdBase && homeBase)
+    val isOpenRun: Boolean get() = (firstBase || secondBase || thirdBase) && !homeBase
+    val isClosedRun: Boolean get() = homeBase
+    val isRun: Boolean get() = homeBase
 }
 
 @Serializable
@@ -216,19 +218,23 @@ fun GameScreen(
         }
     }
 
-    val minutes = gameViewModel.elapsedSeconds / 60
+    val hours = gameViewModel.elapsedSeconds / 3600
+    val minutes = (gameViewModel.elapsedSeconds % 3600) / 60
     val seconds = gameViewModel.elapsedSeconds % 60
-    val timeFormatted = String.format("%02d:%02d", minutes, seconds)
+    val timeFormatted = String.format("%02d:%02d:%02d", hours, minutes, seconds)
     val activeLineup = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Lineup else gameViewModel.team2Lineup
 
-    val calculatedRunsTeam1 = gameViewModel.team1Lineup.sumOf { player -> player.innings.count { it.isRun } }
-    val calculatedRunsTeam2 = gameViewModel.team2Lineup.sumOf { player -> player.innings.count { it.isRun } }
+    val openRunsTeam1 = gameViewModel.team1Lineup.sumOf { player -> player.innings.count { it.isOpenRun } }
+    val openRunsTeam2 = gameViewModel.team2Lineup.sumOf { player -> player.innings.count { it.isOpenRun } }
+    val closedRunsTeam1 = gameViewModel.team1Lineup.sumOf { player -> player.innings.count { it.isClosedRun } }
+    val closedRunsTeam2 = gameViewModel.team2Lineup.sumOf { player -> player.innings.count { it.isClosedRun } }
 
     val currentHits = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Hits else gameViewModel.team2Hits
     val currentErrors = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Errors else gameViewModel.team2Errors
     val currentOuts = if (gameViewModel.selectedTeam == 1) gameViewModel.team1Outs else gameViewModel.team2Outs
     val currentHomeRuns = if (gameViewModel.selectedTeam == 1) gameViewModel.team1HomeRuns else gameViewModel.team2HomeRuns
-    val currentCalculatedRuns = if (gameViewModel.selectedTeam == 1) calculatedRunsTeam1 else calculatedRunsTeam2
+    val currentOpenRuns = if (gameViewModel.selectedTeam == 1) openRunsTeam1 else openRunsTeam2
+    val currentClosedRuns = if (gameViewModel.selectedTeam == 1) closedRunsTeam1 else closedRunsTeam2
 
     fun syncToSupabase(status: String = "LIVE") {
         val matchId = gameViewModel.currentMatchId ?: return
@@ -250,8 +256,9 @@ fun GameScreen(
                         set("errors", currentErrors)
                         set("outs", currentOuts)
                         set("home_runs", currentHomeRuns)
-                        set("runs", currentCalculatedRuns)
+                        set("runs", currentClosedRuns)
                         set("status", status)
+                        set("mode", modeTitle)
                         set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
                         if (currentUserId != null) {
                             set("user_id", currentUserId)
@@ -278,7 +285,7 @@ fun GameScreen(
         if (gameViewModel.isTimerRunning) {
             gameViewModel.toggleTimer()
         }
-        val matchId = gameViewModel.currentMatchId
+        val matchCodeToUse = gameViewModel.matchCode ?: gameViewModel.generateMatchCode()
         val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
         val payload = LineupDataPayload(
             team1Lineup = gameViewModel.team1Lineup.toList(),
@@ -286,52 +293,48 @@ fun GameScreen(
             durationSeconds = gameViewModel.elapsedSeconds
         )
         val jsonLineupElement = Json.parseToJsonElement(Json.encodeToString(payload))
+        val totalClosedRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isClosedRun } }) +
+                              (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isClosedRun } })
 
         scope.launch(Dispatchers.IO) {
             try {
-                val matchCodeToUse = gameViewModel.matchCode ?: gameViewModel.generateMatchCode()
-                val totalRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isRun } }) +
-                                (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isRun } })
-
-                val finishedMatchData = Match(
-                    id = matchId,
-                    code = matchCodeToUse,
-                    userId = currentUserId,
-                    mode = modeTitle,
-                    homeTeam = gameViewModel.team1Name,
-                    awayTeam = gameViewModel.team2Name,
-                    status = "FINISHED",
-                    lineupData = jsonLineupElement,
-                    runs = totalRuns,
-                    hits = gameViewModel.team1Hits + gameViewModel.team2Hits,
-                    errors = gameViewModel.team1Errors + gameViewModel.team2Errors,
-                    outs = gameViewModel.team1Outs + gameViewModel.team2Outs,
-                    homeRuns = gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns,
-                    durationSeconds = gameViewModel.elapsedSeconds.toInt()
-                )
-
-                Log.d("GameScreen", "Guardando partido terminado con ID: $matchId, Code: $matchCodeToUse, userId: $currentUserId")
+                Log.d("GameScreen", "Finalizando partido en Supabase. Code: $matchCodeToUse, Mode: $modeTitle, userId: $currentUserId")
 
                 SupabaseClientManager.client.postgrest["matches"]
-                    .upsert(finishedMatchData)
+                    .update({
+                        set("lineup_data", jsonLineupElement)
+                        set("home_team", gameViewModel.team1Name)
+                        set("away_team", gameViewModel.team2Name)
+                        set("hits", gameViewModel.team1Hits + gameViewModel.team2Hits)
+                        set("errors", gameViewModel.team1Errors + gameViewModel.team2Errors)
+                        set("outs", gameViewModel.team1Outs + gameViewModel.team2Outs)
+                        set("home_runs", gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns)
+                        set("runs", totalClosedRuns)
+                        set("status", "FINISHED")
+                        set("mode", modeTitle)
+                        set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
+                        if (currentUserId != null) {
+                            set("user_id", currentUserId)
+                        }
+                    }) {
+                        filter {
+                            eq("code", matchCodeToUse)
+                        }
+                    }
 
-                Log.d("GameScreen", "Partido guardado exitosamente como FINISHED en Supabase")
+                Log.d("GameScreen", "Partido con código $matchCodeToUse actualizado exitosamente a FINISHED")
             } catch (e: Exception) {
-                Log.e("GameScreen", "Error al guardar partido con upsert, usando insert de reserva", e)
+                Log.e("GameScreen", "Error al actualizar por código en Supabase, intentando insert directo", e)
                 try {
-                    val fallbackCode = gameViewModel.generateMatchCode()
-                    val totalRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isRun } }) +
-                                    (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isRun } })
-
                     val fallbackMatch = Match(
-                        code = fallbackCode,
+                        code = matchCodeToUse,
                         userId = currentUserId,
                         mode = modeTitle,
                         homeTeam = gameViewModel.team1Name,
                         awayTeam = gameViewModel.team2Name,
                         status = "FINISHED",
                         lineupData = jsonLineupElement,
-                        runs = totalRuns,
+                        runs = totalClosedRuns,
                         hits = gameViewModel.team1Hits + gameViewModel.team2Hits,
                         errors = gameViewModel.team1Errors + gameViewModel.team2Errors,
                         outs = gameViewModel.team1Outs + gameViewModel.team2Outs,
@@ -339,12 +342,10 @@ fun GameScreen(
                         durationSeconds = gameViewModel.elapsedSeconds.toInt()
                     )
 
-                    SupabaseClientManager.client.postgrest["matches"]
-                        .insert(fallbackMatch)
-
-                    Log.d("GameScreen", "Partido guardado exitosamente con insert de reserva")
+                    SupabaseClientManager.client.postgrest["matches"].insert(fallbackMatch)
+                    Log.d("GameScreen", "Partido guardado exitosamente mediante insert directo")
                 } catch (e2: Exception) {
-                    Log.e("GameScreen", "Error crítico al intentar guardar el partido en Supabase", e2)
+                    Log.e("GameScreen", "Error crítico al guardar partido finalizado", e2)
                 }
             } finally {
                 withContext(Dispatchers.Main) {
@@ -371,7 +372,7 @@ fun GameScreen(
                     Text("Jugadores", color = DarkNavy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 TextButton(onClick = { scope.launch { drawerState.close() }; onNavigateFinishedGames() }) {
-                    Text("Partidos Terminados", color = DarkNavy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("Partidos", color = DarkNavy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -528,7 +529,8 @@ fun GameScreen(
                             .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        ReadOnlyCounter("Carreras", currentCalculatedRuns, DarkNavy)
+                        ReadOnlyCounter("C. Abiertas", currentOpenRuns, DarkNavy)
+                        ReadOnlyCounter("C. Cerradas", currentClosedRuns, DarkNavy)
                         ScoreCounter("Hits", currentHits, DarkNavy) { delta ->
                             if (gameViewModel.selectedTeam == 1) {
                                 gameViewModel.team1Hits = (gameViewModel.team1Hits + delta).coerceAtLeast(0)

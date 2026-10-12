@@ -41,6 +41,7 @@ fun AppDrawerContent(
     onNavigateToHome: () -> Unit,
     onNavigateToPlayers: () -> Unit,
     onNavigateToTeams: () -> Unit,
+    onNavigateToMatches: () -> Unit = {},
     onSignOut: () -> Unit,
     onCloseDrawer: () -> Unit
 ) {
@@ -114,6 +115,18 @@ fun AppDrawerContent(
                     onClick = {
                         onCloseDrawer()
                         onNavigateToTeams()
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DrawerNavItem(
+                    label = "Partidos",
+                    icon = Icons.Default.Home,
+                    isSelected = currentRoute == "matches",
+                    onClick = {
+                        onCloseDrawer()
+                        onNavigateToMatches()
                     }
                 )
             }
