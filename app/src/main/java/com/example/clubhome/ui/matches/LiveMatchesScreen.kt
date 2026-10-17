@@ -1,7 +1,6 @@
 package com.example.clubhome.ui.matches
 
-import android.widget.Toast
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,8 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.clubhome.data.model.Match
 import com.example.clubhome.data.remote.SupabaseClientManager
-import com.example.clubhome.ui.auth.BaseballNavy
-import com.example.clubhome.ui.auth.BaseballRed
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,7 +89,7 @@ fun LiveMatchesScreen(
                 title = {
                     Text(
                         text = "Ver Partido en Vivo",
-                        color = Color.White,
+                        color = DarkNavy,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
                     )
@@ -102,14 +99,14 @@ fun LiveMatchesScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Volver",
-                            tint = Color.White
+                            tint = DarkNavy
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF000726))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SkyBlueBackground)
             )
         },
-        containerColor = BaseballNavy
+        containerColor = SkyBlueBackground
     ) { padding ->
         Box(
             modifier = Modifier
@@ -123,8 +120,9 @@ fun LiveMatchesScreen(
                     .fillMaxWidth()
                     .wrapContentHeight(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF001254)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                colors = CardDefaults.cardColors(containerColor = LightCardBg),
+                border = BorderStroke(1.dp, CardBorderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -136,13 +134,13 @@ fun LiveMatchesScreen(
                     Icon(
                         imageVector = Icons.Default.Numbers,
                         contentDescription = null,
-                        tint = BaseballRed,
+                        tint = Color(0xFF1565C0),
                         modifier = Modifier.size(48.dp)
                     )
 
                     Text(
                         text = "Ingresa el Código del Partido",
-                        color = Color.White,
+                        color = DarkNavy,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
@@ -150,7 +148,7 @@ fun LiveMatchesScreen(
 
                     Text(
                         text = "Pídele el código de 6 dígitos al creador del partido para verlo en tiempo real.",
-                        color = Color.LightGray,
+                        color = Color(0xFF334E68),
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center
                     )
@@ -163,28 +161,32 @@ fun LiveMatchesScreen(
                                 errorMessage = null
                             }
                         },
-                        label = { Text("Código (Ej. 8B31X9)", color = Color.Gray) },
+                        label = { Text("Código (Ej. 8B31X9)", color = Color(0xFF555555)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                         textStyle = LocalTextStyle.current.copy(
-                            color = Color.White,
+                            color = DarkNavy,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BaseballRed,
-                            unfocusedBorderColor = Color(0xFF1A2A70),
-                            cursorColor = BaseballRed
+                            focusedBorderColor = DarkNavy,
+                            unfocusedBorderColor = Color(0xFF90CAF9),
+                            cursorColor = DarkNavy,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
                         ),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     if (errorMessage != null) {
                         Text(
                             text = errorMessage!!,
-                            color = Color(0xFFFF5252),
+                            color = Color(0xFFD32F2F),
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -195,7 +197,7 @@ fun LiveMatchesScreen(
                         onClick = { searchMatchByCode() },
                         enabled = matchCodeInput.length == 6 && !isSearching,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = BaseballRed,
+                            containerColor = Color(0xFF1565C0),
                             disabledContainerColor = Color.Gray
                         ),
                         shape = RoundedCornerShape(12.dp),

@@ -32,7 +32,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.clubhome.R
-import com.example.clubhome.ui.auth.BaseballNavy
 import com.example.clubhome.ui.auth.BaseballRed
 
 @Composable
@@ -112,7 +111,7 @@ fun HomeScreen(
                     .padding(top = 10.dp)
                     .width(160.dp)
                     .height(5.dp)
-                    .background(BaseballNavy, shape = RoundedCornerShape(3.dp))
+                    .background(Color(0xFF1565C0), shape = RoundedCornerShape(3.dp))
             )
 
             if (!userName.isNullOrEmpty()) {
@@ -140,7 +139,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Botón Liga (Azul Marino)
+            // Botón Liga (Azul Tema)
             Button(
                 onClick = onLeagueClick,
                 modifier = Modifier
@@ -148,7 +147,7 @@ fun HomeScreen(
                     .height(55.dp),
                 shape = RoundedCornerShape(30.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BaseballNavy,
+                    containerColor = Color(0xFF1565C0),
                     contentColor = Color.White
                 )
             ) {
@@ -195,7 +194,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Botón Ver partidos (Azul Marino)
+            // Botón Ver partidos (Azul Tema)
             Button(
                 onClick = onViewMatchesClick,
                 modifier = Modifier
@@ -203,7 +202,7 @@ fun HomeScreen(
                     .height(55.dp),
                 shape = RoundedCornerShape(30.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BaseballNavy,
+                    containerColor = Color(0xFF1565C0),
                     contentColor = Color.White
                 )
             ) {

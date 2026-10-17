@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -25,7 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,6 +105,7 @@ fun GameScreen(
     gameViewModel: GameViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val tableHorizontalScrollState = rememberScrollState()
@@ -245,6 +249,14 @@ fun GameScreen(
             durationSeconds = gameViewModel.elapsedSeconds
         )
         val jsonElement = Json.parseToJsonElement(Json.encodeToString(payload))
+
+        val totalHits = gameViewModel.team1Hits + gameViewModel.team2Hits
+        val totalErrors = gameViewModel.team1Errors + gameViewModel.team2Errors
+        val totalOuts = gameViewModel.team1Outs + gameViewModel.team2Outs
+        val totalHomeRuns = gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns
+        val totalClosedRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isClosedRun } }) +
+                              (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isClosedRun } })
+
         scope.launch(Dispatchers.IO) {
             try {
                 SupabaseClientManager.client.postgrest["matches"]
@@ -252,13 +264,16 @@ fun GameScreen(
                         set("lineup_data", jsonElement)
                         set("home_team", gameViewModel.team1Name)
                         set("away_team", gameViewModel.team2Name)
-                        set("hits", currentHits)
-                        set("errors", currentErrors)
-                        set("outs", currentOuts)
-                        set("home_runs", currentHomeRuns)
-                        set("runs", currentClosedRuns)
+                        set("hits", totalHits)
+                        set("errors", totalErrors)
+                        set("outs", totalOuts)
+                        set("home_runs", totalHomeRuns)
+                        set("runs", totalClosedRuns)
                         set("status", status)
                         set("mode", modeTitle)
+                        if (!gameViewModel.matchCode.isNullOrBlank()) {
+                            set("code", gameViewModel.matchCode)
+                        }
                         set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
                         if (currentUserId != null) {
                             set("user_id", currentUserId)
@@ -268,6 +283,15 @@ fun GameScreen(
                     }
             } catch (e: Exception) {
                 Log.e("GameScreen", "Error al sincronizar datos con Supabase", e)
+            }
+        }
+    }
+
+    LaunchedEffect(gameViewModel.isTimerRunning) {
+        if (gameViewModel.isTimerRunning) {
+            while (gameViewModel.isTimerRunning) {
+                delay(3000L)
+                syncToSupabase()
             }
         }
     }
@@ -400,18 +424,36 @@ fun GameScreen(
                                 color = DarkNavy
                             )
 
-                            Box(
-                                modifier = Modifier
-                                    .background(Color.White, shape = RoundedCornerShape(12.dp))
-                                    .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = modeTitle.uppercase(),
-                                    color = DarkNavy,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 13.sp
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFF2E7D32), shape = RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "● EN VIVO",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color.White, shape = RoundedCornerShape(12.dp))
+                                        .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = modeTitle.uppercase(),
+                                        color = DarkNavy,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 13.sp
+                                    )
+                                }
                             }
                         }
                     },
@@ -445,7 +487,10 @@ fun GameScreen(
                             border = BorderStroke(1.dp, CardBorderColor),
                             modifier = Modifier.clickable {
                                 val code = gameViewModel.matchCode ?: "------"
-                                Toast.makeText(context, "Código del partido: $code", Toast.LENGTH_SHORT).show()
+                                if (code != "------") {
+                                    clipboardManager.setText(AnnotatedString(code))
+                                    Toast.makeText(context, "Código $code copiado al portapapeles 📋", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         ) {
                             Row(
@@ -459,6 +504,12 @@ fun GameScreen(
                                     color = DarkNavy,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Black
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copiar código",
+                                    tint = DarkNavy,
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         }
