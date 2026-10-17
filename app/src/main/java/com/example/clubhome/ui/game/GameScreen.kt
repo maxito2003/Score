@@ -141,8 +141,8 @@ fun GameScreen(
 
             gameViewModel.currentMode = modeTitle
             gameViewModel.currentMatchId = UUID.randomUUID().toString()
-            gameViewModel.team1Name = "Seleccionar"
-            gameViewModel.team2Name = "Seleccionar"
+            gameViewModel.team1Name = "Local"
+            gameViewModel.team2Name = "Visitante"
             gameViewModel.team1Hits = 0
             gameViewModel.team2Hits = 0
             gameViewModel.team1Errors = 0

@@ -30,8 +30,8 @@ class GameViewModel : ViewModel() {
     var currentMode by mutableStateOf<String?>(null)
 
     // Conservar los nombres de los equipos
-    var team1Name by mutableStateOf("Equipo 1")
-    var team2Name by mutableStateOf("Equipo 2")
+    var team1Name by mutableStateOf("Local")
+    var team2Name by mutableStateOf("Visitante")
 
     var selectedTeam by mutableStateOf(1)
 
@@ -278,8 +278,8 @@ class GameViewModel : ViewModel() {
         activeChannelCode = null
 
         // Resetear nombres por defecto
-        team1Name = "Equipo 1"
-        team2Name = "Equipo 2"
+        team1Name = "Local"
+        team2Name = "Visitante"
 
         resetTimer()
         totalInnings = 10

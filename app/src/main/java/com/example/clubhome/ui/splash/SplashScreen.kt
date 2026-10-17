@@ -21,9 +21,8 @@ fun SplashScreen(
     onSplashFinished: (String) -> Unit
 ) {
     LaunchedEffect(Unit) {
-        delay(2000L) // Muestra la imagen durante 2 segundos
-
         val session = SupabaseClientManager.client.auth.currentSessionOrNull()
+        delay(300L) // Inicio ultrarrápido (300ms)
 
         if (session != null) {
             onSplashFinished("home")
