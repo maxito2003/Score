@@ -4,11 +4,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,44 +52,74 @@ fun WelcomeScreen(
                 .fillMaxSize()
                 .padding(24.dp),
             verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.Start
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Título superior alineado a la izquierda para liberar la pelota y el bate
+            // Contenedor Superior: Texto VIVE, JUEGA, BÉISBOL + Imagen SULTAN + Imagen BINARY centrada abajo
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 40.dp),
-                horizontalAlignment = Alignment.Start
+                    .padding(top = 36.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "VIVE,",
-                    textAlign = TextAlign.Start,
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        letterSpacing = (-1).sp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "VIVE,",
+                            textAlign = TextAlign.Start,
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontSize = 42.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                letterSpacing = (-1).sp
+                            )
+                        )
+                        Text(
+                            text = "JUEGA",
+                            textAlign = TextAlign.Start,
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontSize = 42.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                letterSpacing = (-1).sp
+                            )
+                        )
+                        Text(
+                            text = "BÉISBOL",
+                            textAlign = TextAlign.Start,
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontSize = 50.sp,
+                                fontWeight = FontWeight.Black,
+                                color = BaseballRed,
+                                letterSpacing = 0.sp
+                            )
+                        )
+                    }
+
+                    // Imagen Sultan al lado de VIVE, JUEGA BÉISBOL
+                    Image(
+                        painter = painterResource(id = R.drawable.sultan),
+                        contentDescription = "Imagen Sultan",
+                        modifier = Modifier.size(130.dp),
+                        contentScale = ContentScale.Fit
                     )
-                )
-                Text(
-                    text = "JUEGA",
-                    textAlign = TextAlign.Start,
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        letterSpacing = (-1).sp
-                    )
-                )
-                Text(
-                    text = "BÉISBOL",
-                    textAlign = TextAlign.Start,
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontSize = 58.sp,
-                        fontWeight = FontWeight.Black,
-                        color = BaseballRed,
-                        letterSpacing = 0.sp
-                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Imagen Binary abajo de VIVE, JUEGA BÉISBOL y Sultan, pero CENTRADO
+                Image(
+                    painter = painterResource(id = R.drawable.binary),
+                    contentDescription = "Imagen Binary",
+                    modifier = Modifier
+                        .height(70.dp)
+                        .fillMaxWidth(0.85f),
+                    contentScale = ContentScale.Fit
                 )
             }
 
@@ -95,7 +127,7 @@ fun WelcomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 72.dp),
+                    .padding(bottom = 48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(

@@ -25,6 +25,7 @@ import com.example.clubhome.ui.matches.LiveMatchesScreen
 import com.example.clubhome.ui.matches.MatchStatsScreen
 import com.example.clubhome.ui.players.PlayersScreen
 import com.example.clubhome.ui.splash.SplashScreen
+import com.example.clubhome.ui.stats.PlayerStatsScreen
 import com.example.clubhome.ui.teams.TeamsScreen
 import com.example.clubhome.ui.theme.CLUBHOMETheme
 
@@ -198,11 +199,21 @@ fun ClubHomeApp(authViewModel: AuthViewModel = viewModel()) {
                 onNavigateFinishedGames = {
                     navController.navigate("finished_games_list")
                 },
+                onNavigateToStatistics = {
+                    navController.navigate("statistics")
+                },
                 onSignOut = {
                     authViewModel.signOut {
                         navController.navigate("welcome") { popUpTo(0) }
                     }
                 }
+            )
+        }
+
+        // Ruta de Estadísticas Generales
+        composable("statistics") {
+            PlayerStatsScreen(
+                onBackClick = { navController.popBackStack() }
             )
         }
 

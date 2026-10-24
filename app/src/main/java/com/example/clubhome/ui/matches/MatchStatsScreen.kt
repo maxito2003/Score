@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -287,25 +288,81 @@ fun MatchStatsScreen(
                     }
                 }
 
-                // Tarjeta de Contadores de Estadísticas
+                // Marcador General Fusionado (Local vs Visitante)
                 Card(
                     colors = CardDefaults.cardColors(containerColor = LightCardBg),
                     shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, CardBorderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceAround
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        ReadOnlyCounter("C. Abiertas", currentOpenRuns, DarkNavy)
-                        ReadOnlyCounter("C. Cerradas", currentClosedRuns, DarkNavy)
-                        ReadOnlyCounter("Hits", currentMatch.hits, DarkNavy)
-                        ReadOnlyCounter("Errores", currentMatch.errors, DarkNavy)
-                        ReadOnlyCounter("Outs", currentMatch.outs, DarkNavy)
-                        ReadOnlyCounter("HR", currentMatch.homeRuns, DarkNavy)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = homeTeamName,
+                                    color = DarkNavy,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 17.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "$closedRunsTeam1 Carreras",
+                                    color = Color(0xFF2E7D32),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp
+                                )
+                            }
+
+                            Text(
+                                text = "VS",
+                                color = Color(0xFF1565C0),
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp,
+                                fontStyle = FontStyle.Italic
+                            )
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = awayTeamName,
+                                    color = DarkNavy,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 17.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "$closedRunsTeam2 Carreras",
+                                    color = Color(0xFF2E7D32),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = CardBorderColor)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ReadOnlyCounter("Hits Totales", currentMatch.hits, DarkNavy)
+                            ReadOnlyCounter("Errores", currentMatch.errors, DarkNavy)
+                            ReadOnlyCounter("Outs", currentMatch.outs, DarkNavy)
+                            ReadOnlyCounter("HR", currentMatch.homeRuns, DarkNavy)
+                        }
                     }
                 }
 

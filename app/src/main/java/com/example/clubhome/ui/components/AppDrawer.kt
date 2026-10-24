@@ -42,6 +42,7 @@ fun AppDrawerContent(
     onNavigateToPlayers: () -> Unit,
     onNavigateToTeams: () -> Unit,
     onNavigateToMatches: () -> Unit = {},
+    onNavigateToStatistics: () -> Unit = {},
     onSignOut: () -> Unit,
     onCloseDrawer: () -> Unit
 ) {
@@ -127,6 +128,18 @@ fun AppDrawerContent(
                     onClick = {
                         onCloseDrawer()
                         onNavigateToMatches()
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DrawerNavItem(
+                    label = "Estadísticas",
+                    icon = Icons.Default.Home,
+                    isSelected = currentRoute == "statistics",
+                    onClick = {
+                        onCloseDrawer()
+                        onNavigateToStatistics()
                     }
                 )
             }

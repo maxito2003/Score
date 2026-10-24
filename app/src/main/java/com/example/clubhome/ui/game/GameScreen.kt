@@ -99,6 +99,7 @@ fun GameScreen(
     onNavigateTeams: () -> Unit,
     onNavigatePlayers: () -> Unit,
     onNavigateFinishedGames: () -> Unit,
+    onNavigateToStatistics: () -> Unit = {},
     onSignOut: () -> Unit,
     playersViewModel: PlayersViewModel = viewModel(),
     teamsViewModel: TeamsViewModel = viewModel(),
@@ -144,7 +145,7 @@ fun GameScreen(
             Log.d("GameScreen", "Iniciando NUEVO partido para $modeTitle")
 
             gameViewModel.currentMode = modeTitle
-            gameViewModel.currentMatchId = UUID.randomUUID().toString()
+            gameViewModel.currentMatchId = null
             gameViewModel.team1Name = "Local"
             gameViewModel.team2Name = "Visitante"
             gameViewModel.team1Hits = 0
@@ -198,6 +199,7 @@ fun GameScreen(
                         gameViewModel.currentMatchId = insertedMatch.id
                         gameViewModel.matchCode = insertedMatch.code ?: matchCode
                     }
+                    Log.d("GameScreen", "Partido creado con éxito en Supabase. ID: ${insertedMatch.id}, Code: $matchCode, Mode: $modeTitle")
                 } catch (e: Exception) {
                     Log.e("GameScreen", "Error al crear el partido inicial para el modo $modeTitle", e)
                 }
@@ -241,7 +243,7 @@ fun GameScreen(
     val currentClosedRuns = if (gameViewModel.selectedTeam == 1) closedRunsTeam1 else closedRunsTeam2
 
     fun syncToSupabase(status: String = "LIVE") {
-        val matchId = gameViewModel.currentMatchId ?: return
+        val codeToSync = gameViewModel.matchCode ?: return
         val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
         val payload = LineupDataPayload(
             team1Lineup = gameViewModel.team1Lineup.toList(),
@@ -271,15 +273,13 @@ fun GameScreen(
                         set("runs", totalClosedRuns)
                         set("status", status)
                         set("mode", modeTitle)
-                        if (!gameViewModel.matchCode.isNullOrBlank()) {
-                            set("code", gameViewModel.matchCode)
-                        }
+                        set("code", codeToSync)
                         set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
                         if (currentUserId != null) {
                             set("user_id", currentUserId)
                         }
                     }) {
-                        filter { eq("id", matchId) }
+                        filter { eq("code", codeToSync) }
                     }
             } catch (e: Exception) {
                 Log.e("GameScreen", "Error al sincronizar datos con Supabase", e)
@@ -398,6 +398,9 @@ fun GameScreen(
                 TextButton(onClick = { scope.launch { drawerState.close() }; onNavigateFinishedGames() }) {
                     Text("Partidos", color = DarkNavy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
+                TextButton(onClick = { scope.launch { drawerState.close() }; onNavigateToStatistics() }) {
+                    Text("Estadísticas", color = DarkNavy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
 
                 Spacer(modifier = Modifier.weight(1f))
 
@@ -424,36 +427,18 @@ fun GameScreen(
                                 color = DarkNavy
                             )
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Box(
+                                modifier = Modifier
+                                    .background(Color.White, shape = RoundedCornerShape(12.dp))
+                                    .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color(0xFF2E7D32), shape = RoundedCornerShape(12.dp))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "● EN VIVO",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color.White, shape = RoundedCornerShape(12.dp))
-                                        .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = modeTitle.uppercase(),
-                                        color = DarkNavy,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 13.sp
-                                    )
-                                }
+                                Text(
+                                    text = modeTitle.uppercase(),
+                                    color = DarkNavy,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 13.sp
+                                )
                             }
                         }
                     },
@@ -580,8 +565,7 @@ fun GameScreen(
                             .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        ReadOnlyCounter("C. Abiertas", currentOpenRuns, DarkNavy)
-                        ReadOnlyCounter("C. Cerradas", currentClosedRuns, DarkNavy)
+                        ReadOnlyCounter("Carreras", currentClosedRuns, DarkNavy)
                         ScoreCounter("Hits", currentHits, DarkNavy) { delta ->
                             if (gameViewModel.selectedTeam == 1) {
                                 gameViewModel.team1Hits = (gameViewModel.team1Hits + delta).coerceAtLeast(0)
