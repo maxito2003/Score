@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +87,8 @@ data class PlayerLineup(
     val number: Int,
     val name: String,
     val position: String,
-    val innings: List<BaseState>
+    val innings: List<BaseState>,
+    val substituteName: String? = null
 )
 
 val BASEBALL_POSITIONS = listOf("P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH")
@@ -136,6 +138,10 @@ fun GameScreen(
     var showPosHelpDialog by remember { mutableStateOf(false) }
     var showFinishMatchDialog by remember { mutableStateOf(false) }
     var activeDialogCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    var playerIdxForActionDialog by remember { mutableStateOf<Int?>(null) }
+    var isSelectingSubstitution by remember { mutableStateOf(false) }
+    var isSelectingRename by remember { mutableStateOf(false) }
 
     // Inicialización del Partido: Mantiene los datos al navegar entre pantallas mientras el partido siga activo
     LaunchedEffect(modeTitle) {
@@ -243,7 +249,7 @@ fun GameScreen(
     val currentClosedRuns = if (gameViewModel.selectedTeam == 1) closedRunsTeam1 else closedRunsTeam2
 
     fun syncToSupabase(status: String = "LIVE") {
-        val codeToSync = gameViewModel.matchCode ?: return
+        val codeToSync = gameViewModel.matchCode ?: gameViewModel.generateMatchCode()
         val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
         val payload = LineupDataPayload(
             team1Lineup = gameViewModel.team1Lineup.toList(),
@@ -261,28 +267,62 @@ fun GameScreen(
 
         scope.launch(Dispatchers.IO) {
             try {
-                SupabaseClientManager.client.postgrest["matches"]
-                    .update({
-                        set("lineup_data", jsonElement)
-                        set("home_team", gameViewModel.team1Name)
-                        set("away_team", gameViewModel.team2Name)
-                        set("hits", totalHits)
-                        set("errors", totalErrors)
-                        set("outs", totalOuts)
-                        set("home_runs", totalHomeRuns)
-                        set("runs", totalClosedRuns)
-                        set("status", status)
-                        set("mode", modeTitle)
-                        set("code", codeToSync)
-                        set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
-                        if (currentUserId != null) {
-                            set("user_id", currentUserId)
+                val currentId = gameViewModel.currentMatchId
+                val matchData = Match(
+                    id = currentId,
+                    code = codeToSync,
+                    userId = currentUserId,
+                    mode = modeTitle,
+                    homeTeam = gameViewModel.team1Name,
+                    awayTeam = gameViewModel.team2Name,
+                    status = status,
+                    lineupData = jsonElement,
+                    runs = totalClosedRuns,
+                    hits = totalHits,
+                    errors = totalErrors,
+                    outs = totalOuts,
+                    homeRuns = totalHomeRuns,
+                    durationSeconds = gameViewModel.elapsedSeconds.toInt()
+                )
+
+                if (currentId.isNullOrBlank()) {
+                    val insertedMatch = SupabaseClientManager.client.postgrest["matches"]
+                        .insert(matchData) {
+                            select()
                         }
-                    }) {
-                        filter { eq("code", codeToSync) }
+                        .decodeSingleOrNull<Match>()
+
+                    if (insertedMatch != null) {
+                        withContext(Dispatchers.Main) {
+                            gameViewModel.currentMatchId = insertedMatch.id
+                            gameViewModel.matchCode = insertedMatch.code ?: codeToSync
+                        }
+                        Log.d("GameScreen", "Partido guardado/insertado exitosamente en Supabase. ID: ${insertedMatch.id}, Modo: $modeTitle")
                     }
+                } else {
+                    SupabaseClientManager.client.postgrest["matches"]
+                        .update({
+                            set("lineup_data", jsonElement)
+                            set("home_team", gameViewModel.team1Name)
+                            set("away_team", gameViewModel.team2Name)
+                            set("hits", totalHits)
+                            set("errors", totalErrors)
+                            set("outs", totalOuts)
+                            set("home_runs", totalHomeRuns)
+                            set("runs", totalClosedRuns)
+                            set("status", status)
+                            set("mode", modeTitle)
+                            set("code", codeToSync)
+                            set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
+                            if (currentUserId != null) {
+                                set("user_id", currentUserId)
+                            }
+                        }) {
+                            filter { eq("id", currentId) }
+                        }
+                }
             } catch (e: Exception) {
-                Log.e("GameScreen", "Error al sincronizar datos con Supabase", e)
+                Log.e("GameScreen", "Error al sincronizar/guardar partido en Supabase", e)
             }
         }
     }
@@ -309,74 +349,11 @@ fun GameScreen(
         if (gameViewModel.isTimerRunning) {
             gameViewModel.toggleTimer()
         }
-        val matchCodeToUse = gameViewModel.matchCode ?: gameViewModel.generateMatchCode()
-        val currentUserId = SupabaseClientManager.client.auth.currentUserOrNull()?.id
-        val payload = LineupDataPayload(
-            team1Lineup = gameViewModel.team1Lineup.toList(),
-            team2Lineup = gameViewModel.team2Lineup.toList(),
-            durationSeconds = gameViewModel.elapsedSeconds
-        )
-        val jsonLineupElement = Json.parseToJsonElement(Json.encodeToString(payload))
-        val totalClosedRuns = (gameViewModel.team1Lineup.sumOf { p -> p.innings.count { it.isClosedRun } }) +
-                              (gameViewModel.team2Lineup.sumOf { p -> p.innings.count { it.isClosedRun } })
-
-        scope.launch(Dispatchers.IO) {
-            try {
-                Log.d("GameScreen", "Finalizando partido en Supabase. Code: $matchCodeToUse, Mode: $modeTitle, userId: $currentUserId")
-
-                SupabaseClientManager.client.postgrest["matches"]
-                    .update({
-                        set("lineup_data", jsonLineupElement)
-                        set("home_team", gameViewModel.team1Name)
-                        set("away_team", gameViewModel.team2Name)
-                        set("hits", gameViewModel.team1Hits + gameViewModel.team2Hits)
-                        set("errors", gameViewModel.team1Errors + gameViewModel.team2Errors)
-                        set("outs", gameViewModel.team1Outs + gameViewModel.team2Outs)
-                        set("home_runs", gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns)
-                        set("runs", totalClosedRuns)
-                        set("status", "FINISHED")
-                        set("mode", modeTitle)
-                        set("duration_seconds", gameViewModel.elapsedSeconds.toInt())
-                        if (currentUserId != null) {
-                            set("user_id", currentUserId)
-                        }
-                    }) {
-                        filter {
-                            eq("code", matchCodeToUse)
-                        }
-                    }
-
-                Log.d("GameScreen", "Partido con código $matchCodeToUse actualizado exitosamente a FINISHED")
-            } catch (e: Exception) {
-                Log.e("GameScreen", "Error al actualizar por código en Supabase, intentando insert directo", e)
-                try {
-                    val fallbackMatch = Match(
-                        code = matchCodeToUse,
-                        userId = currentUserId,
-                        mode = modeTitle,
-                        homeTeam = gameViewModel.team1Name,
-                        awayTeam = gameViewModel.team2Name,
-                        status = "FINISHED",
-                        lineupData = jsonLineupElement,
-                        runs = totalClosedRuns,
-                        hits = gameViewModel.team1Hits + gameViewModel.team2Hits,
-                        errors = gameViewModel.team1Errors + gameViewModel.team2Errors,
-                        outs = gameViewModel.team1Outs + gameViewModel.team2Outs,
-                        homeRuns = gameViewModel.team1HomeRuns + gameViewModel.team2HomeRuns,
-                        durationSeconds = gameViewModel.elapsedSeconds.toInt()
-                    )
-
-                    SupabaseClientManager.client.postgrest["matches"].insert(fallbackMatch)
-                    Log.d("GameScreen", "Partido guardado exitosamente mediante insert directo")
-                } catch (e2: Exception) {
-                    Log.e("GameScreen", "Error crítico al guardar partido finalizado", e2)
-                }
-            } finally {
-                withContext(Dispatchers.Main) {
-                    gameViewModel.resetGameSession()
-                    onNavigateFinishedGames()
-                }
-            }
+        syncToSupabase(status = "FINISHED")
+        scope.launch(Dispatchers.Main) {
+            delay(300L)
+            gameViewModel.resetGameSession()
+            onNavigateFinishedGames()
         }
     }
 
@@ -619,6 +596,11 @@ fun GameScreen(
                             gameViewModel.team1Name = selected.name
                             gameViewModel.selectedTeam = 1
                             syncToSupabase()
+                        },
+                        onCustomNameEntered = { customName ->
+                            gameViewModel.team1Name = customName
+                            gameViewModel.selectedTeam = 1
+                            syncToSupabase()
                         }
                     )
 
@@ -633,6 +615,11 @@ fun GameScreen(
                         },
                         onTeamSelected = { selected ->
                             gameViewModel.team2Name = selected.name
+                            gameViewModel.selectedTeam = 2
+                            syncToSupabase()
+                        },
+                        onCustomNameEntered = { customName ->
+                            gameViewModel.team2Name = customName
                             gameViewModel.selectedTeam = 2
                             syncToSupabase()
                         }
@@ -739,21 +726,62 @@ fun GameScreen(
                                         Text("${player.number}", color = DarkNavy, modifier = Modifier.width(28.dp), fontSize = 12.sp, textAlign = TextAlign.Center)
 
                                         Box(modifier = Modifier.width(130.dp)) {
-                                            Text(
-                                                text = player.name,
-                                                color = if (player.name == "Seleccionar") Color.Gray else DarkNavy,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { expandedMenu = true }
-                                            )
+                                            if (!player.substituteName.isNullOrBlank()) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable { playerIdxForActionDialog = playerIdx }
+                                                ) {
+                                                    Text(
+                                                        text = player.name,
+                                                        color = DarkNavy,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = "➔ ",
+                                                            color = Color(0xFFE53935),
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Text(
+                                                            text = player.substituteName,
+                                                            color = Color(0xFF1565C0),
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                Text(
+                                                    text = player.name,
+                                                    color = if (player.name == "Seleccionar") Color.Gray else DarkNavy,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            if (player.name == "Seleccionar") {
+                                                                expandedMenu = true
+                                                            } else {
+                                                                playerIdxForActionDialog = playerIdx
+                                                            }
+                                                        },
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
 
                                             DropdownMenu(
                                                 expanded = expandedMenu,
                                                 onDismissRequest = { expandedMenu = false },
                                                 modifier = Modifier
-                                                    .heightIn(max = 250.dp)
+                                                    .heightIn(max = 280.dp)
                                                     .background(LightCardBg)
                                             ) {
                                                 if (registeredPlayerNames.isEmpty()) {
@@ -764,17 +792,17 @@ fun GameScreen(
                                                     )
                                                 } else {
                                                     registeredPlayerNames.forEach { name ->
-                                                        val isAlreadySelected = activeLineup.any { it.name == name }
                                                         DropdownMenuItem(
                                                             text = {
                                                                 Text(
-                                                                    name,
-                                                                    color = if (isAlreadySelected) Color.Gray else DarkNavy
+                                                                    text = name,
+                                                                    color = DarkNavy,
+                                                                    fontWeight = FontWeight.Normal
                                                                 )
                                                             },
-                                                            enabled = !isAlreadySelected,
+                                                            enabled = true,
                                                             onClick = {
-                                                                activeLineup[playerIdx] = player.copy(name = name)
+                                                                activeLineup[playerIdx] = player.copy(name = name, substituteName = null)
                                                                 expandedMenu = false
                                                                 syncToSupabase()
                                                             }
@@ -790,7 +818,7 @@ fun GameScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                text = player.position.ifBlank { "${playerIdx + 1}" },
+                                                text = if (player.position.isBlank() || player.position == "0") "0" else player.position,
                                                 color = Color(0xFF1565C0),
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
@@ -804,21 +832,38 @@ fun GameScreen(
                                                 expanded = expandedPosMenu,
                                                 onDismissRequest = { expandedPosMenu = false },
                                                 modifier = Modifier
-                                                    .heightIn(max = 250.dp)
+                                                    .heightIn(max = 280.dp)
                                                     .background(LightCardBg)
                                             ) {
+                                                if (player.position != "0" && player.position.isNotBlank()) {
+                                                    DropdownMenuItem(
+                                                        text = { Text("❌ Quitar posición (0)", color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold) },
+                                                        onClick = {
+                                                            activeLineup[playerIdx] = player.copy(position = "0")
+                                                            expandedPosMenu = false
+                                                            syncToSupabase()
+                                                        }
+                                                    )
+                                                    HorizontalDivider(color = CardBorderColor)
+                                                }
+
                                                 val posOptions = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
                                                 posOptions.forEach { option ->
+                                                    val isSelectedPos = player.position == option
                                                     DropdownMenuItem(
                                                         text = {
                                                             Text(
-                                                                option,
-                                                                color = if (player.position == option) Color(0xFF1565C0) else DarkNavy,
-                                                                fontWeight = if (player.position == option) FontWeight.Bold else FontWeight.Normal
+                                                                text = if (isSelectedPos) "$option (Quitar)" else option,
+                                                                color = if (isSelectedPos) Color(0xFFD32F2F) else DarkNavy,
+                                                                fontWeight = if (isSelectedPos) FontWeight.Bold else FontWeight.Normal
                                                             )
                                                         },
                                                         onClick = {
-                                                            activeLineup[playerIdx] = player.copy(position = option)
+                                                            if (isSelectedPos) {
+                                                                activeLineup[playerIdx] = player.copy(position = "0")
+                                                            } else {
+                                                                activeLineup[playerIdx] = player.copy(position = option)
+                                                            }
                                                             expandedPosMenu = false
                                                             syncToSupabase()
                                                         }
@@ -1048,6 +1093,163 @@ fun GameScreen(
             }
         )
     }
+
+    val activeIdx = playerIdxForActionDialog
+    if (activeIdx != null && activeIdx in activeLineup.indices) {
+        val player = activeLineup[activeIdx]
+
+        if (isSelectingSubstitution) {
+            AlertDialog(
+                onDismissRequest = {
+                    isSelectingSubstitution = false
+                    playerIdxForActionDialog = null
+                },
+                title = { Text("Seleccionar Sustituto (Entra)", color = DarkNavy, fontWeight = FontWeight.Bold) },
+                text = {
+                    val availableForSub = registeredPlayerNames
+                    if (availableForSub.isEmpty()) {
+                        Text("No hay otros jugadores disponibles en la lista del equipo.", color = Color.Gray)
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                            items(availableForSub) { name ->
+                                TextButton(
+                                    onClick = {
+                                        activeLineup[activeIdx] = player.copy(substituteName = name)
+                                        isSelectingSubstitution = false
+                                        playerIdxForActionDialog = null
+                                        syncToSupabase()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(name, color = Color(0xFF1565C0), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        isSelectingSubstitution = false
+                        playerIdxForActionDialog = null
+                    }) {
+                        Text("Cancelar", color = DarkNavy)
+                    }
+                },
+                confirmButton = {},
+                containerColor = LightCardBg
+            )
+        } else if (isSelectingRename) {
+            AlertDialog(
+                onDismissRequest = {
+                    isSelectingRename = false
+                    playerIdxForActionDialog = null
+                },
+                title = { Text("Corregir / Cambiar Nombre", color = DarkNavy, fontWeight = FontWeight.Bold) },
+                text = {
+                    val availableForRename = registeredPlayerNames
+                    if (availableForRename.isEmpty()) {
+                        Text("No hay otros jugadores disponibles.", color = Color.Gray)
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                            items(availableForRename) { name ->
+                                TextButton(
+                                    onClick = {
+                                        activeLineup[activeIdx] = player.copy(name = name, substituteName = null)
+                                        isSelectingRename = false
+                                        playerIdxForActionDialog = null
+                                        syncToSupabase()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(name, color = DarkNavy, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        isSelectingRename = false
+                        playerIdxForActionDialog = null
+                    }) {
+                        Text("Cancelar", color = DarkNavy)
+                    }
+                },
+                confirmButton = {},
+                containerColor = LightCardBg
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { playerIdxForActionDialog = null },
+                title = {
+                    Column {
+                        Text("Opciones de Jugador (#${player.number})", color = DarkNavy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(
+                            text = if (!player.substituteName.isNullOrBlank()) "${player.name} ➔ ${player.substituteName}" else player.name,
+                            color = Color(0xFF1565C0),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { isSelectingSubstitution = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+                        ) {
+                            Text("🔄 Realizar Sustitución / Cambio", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { isSelectingRename = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001254))
+                        ) {
+                            Text("✏️ Corregir / Cambiar Nombre", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        if (!player.substituteName.isNullOrBlank()) {
+                            OutlinedButton(
+                                onClick = {
+                                    activeLineup[activeIdx] = player.copy(substituteName = null)
+                                    playerIdxForActionDialog = null
+                                    syncToSupabase()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                border = BorderStroke(1.dp, Color(0xFF1565C0))
+                            ) {
+                                Text("↩️ Deshacer Sustitución", color = Color(0xFF1565C0), fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                activeLineup[activeIdx] = player.copy(name = "Seleccionar", substituteName = null)
+                                playerIdxForActionDialog = null
+                                syncToSupabase()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            border = BorderStroke(1.dp, Color(0xFFE53935))
+                        ) {
+                            Text("❌ Quitar Jugador", color = Color(0xFFE53935), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { playerIdxForActionDialog = null }) {
+                        Text("Cancelar", color = DarkNavy)
+                    }
+                },
+                confirmButton = {},
+                containerColor = LightCardBg
+            )
+        }
+    }
 }
 
 @Composable
@@ -1057,9 +1259,12 @@ fun TeamDropdownButton(
     teamsList: List<Team>,
     modifier: Modifier = Modifier,
     onButtonClick: () -> Unit,
-    onTeamSelected: (Team) -> Unit
+    onTeamSelected: (Team) -> Unit,
+    onCustomNameEntered: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showCustomNameDialog by remember { mutableStateOf(false) }
+    var customNameInput by remember { mutableStateOf("") }
 
     Box(modifier = modifier) {
         Button(
@@ -1103,9 +1308,19 @@ fun TeamDropdownButton(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier
-                .heightIn(max = 250.dp)
+                .heightIn(max = 280.dp)
                 .background(LightCardBg)
         ) {
+            DropdownMenuItem(
+                text = { Text("✏️ Escribir nombre personalizado", color = Color(0xFF1565C0), fontWeight = FontWeight.Bold) },
+                onClick = {
+                    customNameInput = if (teamName != "Local" && teamName != "Visitante") teamName else ""
+                    showCustomNameDialog = true
+                    expanded = false
+                }
+            )
+            HorizontalDivider(color = CardBorderColor)
+
             if (teamsList.isEmpty()) {
                 DropdownMenuItem(
                     text = { Text("Sin equipos registrados", color = Color.Gray) },
@@ -1130,6 +1345,47 @@ fun TeamDropdownButton(
                 }
             }
         }
+    }
+
+    if (showCustomNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showCustomNameDialog = false },
+            title = { Text("Nombre del Equipo", color = DarkNavy, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = customNameInput,
+                    onValueChange = { customNameInput = it },
+                    label = { Text("Escribe el nombre del equipo") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DarkNavy,
+                        unfocusedTextColor = DarkNavy,
+                        focusedBorderColor = DarkNavy,
+                        unfocusedBorderColor = Color(0xFF90CAF9)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (customNameInput.isNotBlank()) {
+                            onCustomNameEntered(customNameInput.trim())
+                        }
+                        showCustomNameDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+                ) {
+                    Text("Guardar", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomNameDialog = false }) {
+                    Text("Cancelar", color = DarkNavy)
+                }
+            },
+            containerColor = LightCardBg
+        )
     }
 }
 

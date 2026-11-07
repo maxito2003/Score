@@ -487,15 +487,45 @@ fun MatchStatsScreen(
                                     ) {
                                         Text("${player.number}", color = DarkNavy, modifier = Modifier.width(28.dp), fontSize = 12.sp, textAlign = TextAlign.Center)
 
-                                        Text(
-                                            text = player.name,
-                                            color = if (player.name == "Seleccionar") Color.Gray else DarkNavy,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            modifier = Modifier.width(130.dp),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Box(modifier = Modifier.width(130.dp)) {
+                                            if (!player.substituteName.isNullOrBlank()) {
+                                                Column(modifier = Modifier.fillMaxWidth()) {
+                                                    Text(
+                                                        text = player.name,
+                                                        color = DarkNavy,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = "➔ ",
+                                                            color = Color(0xFFE53935),
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Text(
+                                                            text = player.substituteName,
+                                                            color = Color(0xFF1565C0),
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                Text(
+                                                    text = player.name,
+                                                    color = if (player.name == "Seleccionar") Color.Gray else DarkNavy,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
 
                                         Text(
                                             text = player.position.ifBlank { "${playerIdx + 1}" },

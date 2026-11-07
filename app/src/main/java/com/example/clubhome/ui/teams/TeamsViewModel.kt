@@ -54,11 +54,31 @@ class TeamsViewModel(
                 val userId = getCurrentUserId() ?: return@launch
                 val teamWithUser = team.copy(
                     userId = userId,
-                    groupId = groupId
+                    groupId = groupId ?: team.groupId
                 )
 
-                repository.createTeam(teamWithUser)
-                loadTeams(groupId) // Recarga los equipos filtrados por el grupo actual
+                if (team.id.isNullOrBlank()) {
+                    repository.createTeam(teamWithUser)
+                } else {
+                    repository.updateTeam(teamWithUser)
+                }
+                loadTeams(groupId ?: team.groupId) // Recarga los equipos filtrados por el grupo actual
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // Elimina un equipo de la base de datos de Supabase
+    fun deleteTeam(teamId: String, groupId: String? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            try {
+                val userId = getCurrentUserId()
+                repository.deleteTeam(teamId, userId)
+                loadTeams(groupId)
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

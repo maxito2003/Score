@@ -209,6 +209,9 @@ fun TeamsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        teamToDelete?.id?.let { id ->
+                            viewModel.deleteTeam(id, groupId = modeTitle)
+                        }
                         teamToDelete = null
                     }
                 ) {

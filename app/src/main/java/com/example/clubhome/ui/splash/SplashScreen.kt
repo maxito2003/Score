@@ -21,8 +21,14 @@ fun SplashScreen(
     onSplashFinished: (String) -> Unit
 ) {
     LaunchedEffect(Unit) {
-        val session = SupabaseClientManager.client.auth.currentSessionOrNull()
-        delay(300L) // Inicio ultrarrápido (300ms)
+        val session = try {
+            SupabaseClientManager.client.auth.awaitInitialization()
+            SupabaseClientManager.client.auth.currentSessionOrNull()
+        } catch (e: Exception) {
+            SupabaseClientManager.client.auth.currentSessionOrNull()
+        }
+
+        delay(300L)
 
         if (session != null) {
             onSplashFinished("home")
