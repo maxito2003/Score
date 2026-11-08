@@ -43,6 +43,8 @@ import io.github.jan.supabase.auth.auth
 import com.example.clubhome.ui.auth.BaseballRed
 import com.example.clubhome.ui.components.BaseAnnotationDialog
 import com.example.clubhome.ui.components.BaseballDiamond
+import com.example.clubhome.ui.components.BaseballScoreboard
+import com.example.clubhome.ui.components.getActiveBatterName
 import com.example.clubhome.ui.players.PlayersViewModel
 import com.example.clubhome.ui.teams.TeamsViewModel
 import io.github.jan.supabase.postgrest.postgrest
@@ -79,7 +81,12 @@ data class BaseState(
 data class LineupDataPayload(
     val team1Lineup: List<PlayerLineup>,
     val team2Lineup: List<PlayerLineup>,
-    val durationSeconds: Long
+    val durationSeconds: Long,
+    val balls: Int = 0,
+    val strikes: Int = 0,
+    val outs: Int = 0,
+    val homeRunMessage: String? = null,
+    val homeRunTimestamp: Long = 0L
 )
 
 @Serializable
@@ -91,7 +98,7 @@ data class PlayerLineup(
     val substituteName: String? = null
 )
 
-val BASEBALL_POSITIONS = listOf("P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH")
+val BASEBALL_POSITIONS = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -254,7 +261,12 @@ fun GameScreen(
         val payload = LineupDataPayload(
             team1Lineup = gameViewModel.team1Lineup.toList(),
             team2Lineup = gameViewModel.team2Lineup.toList(),
-            durationSeconds = gameViewModel.elapsedSeconds
+            durationSeconds = gameViewModel.elapsedSeconds,
+            balls = gameViewModel.balls,
+            strikes = gameViewModel.strikes,
+            outs = currentOuts,
+            homeRunMessage = gameViewModel.homeRunMessage,
+            homeRunTimestamp = gameViewModel.homeRunTimestamp
         )
         val jsonElement = Json.parseToJsonElement(Json.encodeToString(payload))
 
@@ -529,54 +541,70 @@ fun GameScreen(
                     }
                 }
 
-                // Tarjeta de Contadores
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = LightCardBg),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, CardBorderColor),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceAround
-                    ) {
-                        ReadOnlyCounter("Carreras", currentClosedRuns, DarkNavy)
-                        ScoreCounter("Hits", currentHits, DarkNavy) { delta ->
-                            if (gameViewModel.selectedTeam == 1) {
-                                gameViewModel.team1Hits = (gameViewModel.team1Hits + delta).coerceAtLeast(0)
-                            } else {
-                                gameViewModel.team2Hits = (gameViewModel.team2Hits + delta).coerceAtLeast(0)
-                            }
-                            syncToSupabase()
+                // MARCADOR LED DE BÉISBOL RETRO
+                val activeBatter = getActiveBatterName(activeLineup, gameViewModel.team1Lineup, gameViewModel.team2Lineup)
+
+                BaseballScoreboard(
+                    homeTeamName = gameViewModel.team1Name,
+                    awayTeamName = gameViewModel.team2Name,
+                    team1Lineup = gameViewModel.team1Lineup,
+                    team2Lineup = gameViewModel.team2Lineup,
+                    team1Hits = gameViewModel.team1Hits,
+                    team2Hits = gameViewModel.team2Hits,
+                    team1Errors = gameViewModel.team1Errors,
+                    team2Errors = gameViewModel.team2Errors,
+                    totalInnings = gameViewModel.totalInnings,
+                    balls = gameViewModel.balls,
+                    strikes = gameViewModel.strikes,
+                    outs = currentOuts,
+                    activeBatterName = activeBatter,
+                    homeRunMessage = gameViewModel.homeRunMessage,
+                    homeRunTimestamp = gameViewModel.homeRunTimestamp,
+                    isCoachMode = true,
+                    onAdjustBalls = { delta ->
+                        gameViewModel.balls = (gameViewModel.balls + delta).coerceIn(0, 3)
+                        syncToSupabase()
+                    },
+                    onAdjustStrikes = { delta ->
+                        gameViewModel.strikes = (gameViewModel.strikes + delta).coerceIn(0, 2)
+                        syncToSupabase()
+                    },
+                    onAdjustOuts = { delta ->
+                        if (gameViewModel.selectedTeam == 1) {
+                            gameViewModel.team1Outs = (gameViewModel.team1Outs + delta).coerceIn(0, 2)
+                        } else {
+                            gameViewModel.team2Outs = (gameViewModel.team2Outs + delta).coerceIn(0, 2)
                         }
-                        ScoreCounter("Errores", currentErrors, DarkNavy) { delta ->
-                            if (gameViewModel.selectedTeam == 1) {
-                                gameViewModel.team1Errors = (gameViewModel.team1Errors + delta).coerceAtLeast(0)
-                            } else {
-                                gameViewModel.team2Errors = (gameViewModel.team2Errors + delta).coerceAtLeast(0)
-                            }
-                            syncToSupabase()
+                        syncToSupabase()
+                    },
+                    onAdjustHits = { delta ->
+                        if (gameViewModel.selectedTeam == 1) {
+                            gameViewModel.team1Hits = (gameViewModel.team1Hits + delta).coerceAtLeast(0)
+                        } else {
+                            gameViewModel.team2Hits = (gameViewModel.team2Hits + delta).coerceAtLeast(0)
                         }
-                        ScoreCounter("Out", currentOuts, DarkNavy) { delta ->
-                            if (gameViewModel.selectedTeam == 1) {
-                                gameViewModel.team1Outs = (gameViewModel.team1Outs + delta).coerceIn(0, 3)
-                            } else {
-                                gameViewModel.team2Outs = (gameViewModel.team2Outs + delta).coerceIn(0, 3)
-                            }
-                            syncToSupabase()
+                        syncToSupabase()
+                    },
+                    onAdjustErrors = { delta ->
+                        if (gameViewModel.selectedTeam == 1) {
+                            gameViewModel.team1Errors = (gameViewModel.team1Errors + delta).coerceAtLeast(0)
+                        } else {
+                            gameViewModel.team2Errors = (gameViewModel.team2Errors + delta).coerceAtLeast(0)
                         }
-                        ScoreCounter("HR", currentHomeRuns, DarkNavy) { delta ->
-                            if (gameViewModel.selectedTeam == 1) {
-                                gameViewModel.team1HomeRuns = (gameViewModel.team1HomeRuns + delta).coerceAtLeast(0)
-                            } else {
-                                gameViewModel.team2HomeRuns = (gameViewModel.team2HomeRuns + delta).coerceAtLeast(0)
-                            }
-                            syncToSupabase()
+                        syncToSupabase()
+                    },
+                    onAdjustHomeRuns = { delta ->
+                        if (gameViewModel.selectedTeam == 1) {
+                            gameViewModel.team1HomeRuns = (gameViewModel.team1HomeRuns + delta).coerceAtLeast(0)
+                        } else {
+                            gameViewModel.team2HomeRuns = (gameViewModel.team2HomeRuns + delta).coerceAtLeast(0)
                         }
+                        if (delta > 0) {
+                            gameViewModel.triggerHomeRunEvent(activeBatter)
+                        }
+                        syncToSupabase()
                     }
-                }
+                )
 
                 // Desplegables de Equipos
                 Row(
@@ -1028,6 +1056,9 @@ fun GameScreen(
 
                     updatedInnings[inningIdx] = updatedState
                     activeLineup[playerIdx] = player.copy(innings = updatedInnings)
+                    if (updatedState.playType == "HR") {
+                        gameViewModel.triggerHomeRunEvent(player.name)
+                    }
                     syncToSupabase()
                     activeDialogCell = null
                 }

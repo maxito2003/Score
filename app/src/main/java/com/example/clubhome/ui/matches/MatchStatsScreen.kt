@@ -35,6 +35,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.clubhome.data.model.Match
 import com.example.clubhome.data.remote.SupabaseClientManager
 import com.example.clubhome.ui.components.BaseballDiamond
+import com.example.clubhome.ui.components.BaseballScoreboard
+import com.example.clubhome.ui.components.getActiveBatterName
 import com.example.clubhome.ui.game.*
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.delay
@@ -288,83 +290,27 @@ fun MatchStatsScreen(
                     }
                 }
 
-                // Marcador General Fusionado (Local vs Visitante)
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = LightCardBg),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, CardBorderColor),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = homeTeamName,
-                                    color = DarkNavy,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 17.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "$closedRunsTeam1 Carreras",
-                                    color = Color(0xFF2E7D32),
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 16.sp
-                                )
-                            }
+                // MARCADOR LED DE BÉISBOL RETRO EN TIEMPO REAL
+                val activeBatterName = getActiveBatterName(activeLineup, team1Lineup, team2Lineup)
 
-                            Text(
-                                text = "VS",
-                                color = Color(0xFF1565C0),
-                                fontWeight = FontWeight.Black,
-                                fontSize = 18.sp,
-                                fontStyle = FontStyle.Italic
-                            )
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = awayTeamName,
-                                    color = DarkNavy,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 17.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "$closedRunsTeam2 Carreras",
-                                    color = Color(0xFF2E7D32),
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = CardBorderColor)
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ReadOnlyCounter("Hits Totales", currentMatch.hits, DarkNavy)
-                            ReadOnlyCounter("Errores", currentMatch.errors, DarkNavy)
-                            ReadOnlyCounter("Outs", currentMatch.outs, DarkNavy)
-                            ReadOnlyCounter("HR", currentMatch.homeRuns, DarkNavy)
-                        }
-                    }
-                }
+                BaseballScoreboard(
+                    homeTeamName = homeTeamName,
+                    awayTeamName = awayTeamName,
+                    team1Lineup = team1Lineup,
+                    team2Lineup = team2Lineup,
+                    team1Hits = payload?.team1Lineup?.sumOf { p -> p.innings.count { it.playType in listOf("H1", "H2", "H3", "HR") } } ?: currentMatch.hits,
+                    team2Hits = payload?.team2Lineup?.sumOf { p -> p.innings.count { it.playType in listOf("H1", "H2", "H3", "HR") } } ?: 0,
+                    team1Errors = currentMatch.errors,
+                    team2Errors = 0,
+                    totalInnings = totalInnings,
+                    balls = payload?.balls ?: 0,
+                    strikes = payload?.strikes ?: 0,
+                    outs = payload?.outs ?: currentMatch.outs,
+                    activeBatterName = activeBatterName,
+                    homeRunMessage = payload?.homeRunMessage,
+                    homeRunTimestamp = payload?.homeRunTimestamp ?: 0L,
+                    isCoachMode = false
+                )
 
                 // Selector de Equipos (Local vs Visitante)
                 Row(

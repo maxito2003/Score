@@ -50,6 +50,19 @@ class GameViewModel : ViewModel() {
     val team1Lineup = mutableStateListOf<PlayerLineup>()
     val team2Lineup = mutableStateListOf<PlayerLineup>()
 
+    // Marcador LED (Balls, Strikes)
+    var balls by mutableStateOf(0)
+    var strikes by mutableStateOf(0)
+
+    // Evento de Home Run para el Banner LED (dura 8 segundos)
+    var homeRunMessage by mutableStateOf<String?>(null)
+    var homeRunTimestamp by mutableStateOf(0L)
+
+    fun triggerHomeRunEvent(playerName: String) {
+        homeRunMessage = "HOME RUN!!! - $playerName 💥"
+        homeRunTimestamp = System.currentTimeMillis()
+    }
+
     // Estadísticas Equipo 1
     var team1Hits by mutableStateOf(0)
     var team1Errors by mutableStateOf(0)
@@ -129,7 +142,7 @@ class GameViewModel : ViewModel() {
                 PlayerLineup(
                     number = i + 1,
                     name = "Seleccionar",
-                    position = BASEBALL_POSITIONS.getOrElse(i) { "${i + 1}" },
+                    position = "${i + 1}",
                     innings = List(10) { BaseState() }
                 )
             }
@@ -142,7 +155,7 @@ class GameViewModel : ViewModel() {
                 PlayerLineup(
                     number = i + 1,
                     name = "Seleccionar",
-                    position = BASEBALL_POSITIONS.getOrElse(i) { "${i + 1}" },
+                    position = "${i + 1}",
                     innings = List(10) { BaseState() }
                 )
             }
